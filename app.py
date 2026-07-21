@@ -61,8 +61,6 @@ if "agencies" not in st.session_state:
 if "cyber_alerts" not in st.session_state:
     st.session_state.cyber_alerts = load_json("alerts.json", [])
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 # --- Admin Password (Isko badalna hai toh yahan change karo) ---
 ADMIN_PASSWORD = "esha4t4boss"
 =======
