@@ -62,7 +62,7 @@ if "cyber_alerts" not in st.session_state:
     st.session_state.cyber_alerts = load_json("alerts.json", [])
 
 # --- Admin Password (Isko badalna hai toh yahan change karo) ---
-ADMIN_PASSWORD = "E4GRID@2026"
+ADMIN_PASSWORD = "esha4t4boss"
 
 # ==========================================
 # 5. SAVE ALL FUNCTION (Har change ke baad yeh call hota hai)
