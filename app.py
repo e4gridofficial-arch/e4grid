@@ -61,8 +61,17 @@ if "agencies" not in st.session_state:
 if "cyber_alerts" not in st.session_state:
     st.session_state.cyber_alerts = load_json("alerts.json", [])
 
+<<<<<<< HEAD
+<<<<<<< HEAD
 # --- Admin Password (Isko badalna hai toh yahan change karo) ---
 ADMIN_PASSWORD = "esha4t4boss"
+=======
+# --- Admin Password (Isko badalna hai toh yahan change karo) ---
+=======
+# --- Admin Password (Isko badalna hai toh yahan change karo) ---
+>>>>>>> e157bec705d148b73e66dffa1cde3fa328cdac68
+ADMIN_PASSWORD = "esha4t4boss"
+>>>>>>> e157bec705d148b73e66dffa1cde3fa328cdac68
 
 # ==========================================
 # 5. SAVE ALL FUNCTION (Har change ke baad yeh call hota hai)
@@ -382,6 +391,8 @@ if not st.session_state.logged_in:
     login_form()
 else:
     logout()
+<<<<<<< HEAD
+<<<<<<< HEAD
     if st.session_state.role == "public":
         public_dashboard()
     elif st.session_state.role == "admin":
@@ -390,3 +401,25 @@ else:
         mnc_dashboard(st.session_state.client)
     elif st.session_state.role == "agency":
         agency_dashboard(st.session_state.client)
+=======
+    if st.session_state.role == "public":
+        public_dashboard()
+    elif st.session_state.role == "admin":
+        admin_dashboard()
+    elif st.session_state.role == "mnc":
+        mnc_dashboard(st.session_state.client)
+    elif st.session_state.role == "agency":
+        agency_dashboard(st.session_state.client)
+
+>>>>>>> e157bec705d148b73e66dffa1cde3fa328cdac68
+=======
+    if st.session_state.role == "public":
+        public_dashboard()
+    elif st.session_state.role == "admin":
+        admin_dashboard()
+    elif st.session_state.role == "mnc":
+        mnc_dashboard(st.session_state.client)
+    elif st.session_state.role == "agency":
+        agency_dashboard(st.session_state.client)
+
+>>>>>>> e157bec705d148b73e66dffa1cde3fa328cdac68
