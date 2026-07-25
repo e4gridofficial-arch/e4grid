@@ -6,7 +6,7 @@ import os
 import random
 
 # ==========================================
-# CONFIG & CSS
+# CONFIG & CSS (V2 Premium Look)
 # ==========================================
 st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
 
@@ -15,12 +15,25 @@ st.markdown("""
     <style>
         * { font-family: 'Inter', sans-serif; }
         .stApp { background: #0a0f1e; }
-        .main-header { text-align: center; padding: 30px 20px 20px 20px; background: linear-gradient(135deg, #0a0f1e 0%, #1a2a4a 100%); border-radius: 30px; margin-bottom: 30px; border: 1px solid rgba(251, 191, 36, 0.15); }
         .stMetric { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(5px); border-radius: 12px; border-left: 4px solid #fbbf24; padding: 10px; }
         .stButton > button { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #0a0f1e; font-weight: 700; border: none; border-radius: 12px; padding: 0.6rem 1.5rem; transition: 0.3s; }
         .stButton > button:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); }
         .footer { text-align: center; padding: 30px 0 10px 0; color: #475569; font-size: 0.9rem; border-top: 1px solid #1e293b; margin-top: 40px; }
         .footer a { color: #fbbf24; text-decoration: none; }
+        .tagline-gold { color: #fbbf24; font-weight: 600; letter-spacing: 2px; }
+        
+        /* Timeline CSS */
+        .timeline-container { display: flex; align-items: center; gap: 5px; margin: 10px 0; flex-wrap: wrap; }
+        .timeline-step { display: flex; align-items: center; gap: 5px; }
+        .timeline-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .timeline-line { width: 30px; height: 2px; background: #334155; }
+        .timeline-line.done { background: #fbbf24; }
+        .timeline-label { font-size: 0.7rem; color: #94a3b8; }
+        .timeline-label.active { color: #fbbf24; font-weight: 600; }
+        
+        .health-score { font-size: 2.5rem; font-weight: 800; color: #fbbf24; text-align: center; }
+        .notif-bell { position: relative; display: inline-block; }
+        .notif-badge { position: absolute; top: -5px; right: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: 700; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -115,7 +128,33 @@ def save_uploaded_file(uploaded_file):
     return None
 
 # ==========================================
-# LANDING PAGE
+# HELPER: TIMELINE GENERATOR (V2 Feature)
+# ==========================================
+def generate_timeline(current_status):
+    steps = ["New", "Under Review", "Resolved", "Closed"]
+    status_map = {"New": 0, "Under Review": 1, "Resolved": 2, "Closed": 3}
+    active_index = status_map.get(current_status, 0)
+    
+    html = '<div class="timeline-container">'
+    for i, step in enumerate(steps):
+        is_active = i <= active_index
+        is_current = i == active_index
+        dot_color = "#fbbf24" if is_active else "#334155"
+        label_class = "active" if is_current else ""
+        html += f"""
+        <div class="timeline-step">
+            <div class="timeline-dot" style="background:{dot_color};"></div>
+            <span class="timeline-label {label_class}">{step}</span>
+        </div>
+        """
+        if i < len(steps)-1:
+            line_class = "done" if i < active_index else ""
+            html += f'<div class="timeline-line {line_class}"></div>'
+    html += '</div>'
+    return html
+
+# ==========================================
+# LANDING PAGE (V2 Upgraded)
 # ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
@@ -126,39 +165,60 @@ def landing_page():
             st.markdown("<h1 style='color:#fbbf24;'>⚡</h1>", unsafe_allow_html=True)
     with col2:
         st.markdown(
-            """
+            f"""
             <div style="padding-top: 15px;">
                 <div style="font-size: 2.8rem; font-weight: 800; color: #fbbf24;">E4GRID</div>
-                <div style="color: #94a3b8; font-size: 1rem; letter-spacing: 2px;">INTELLIGENCE · COMPLIANCE · PROTECTION · TRUST</div>
+                <div class="tagline-gold" style="font-size: 1.1rem; letter-spacing: 2px;">See Risk · Build Trust · Stay Complaint</div>
                 <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
             </div>
             """,
             unsafe_allow_html=True
         )
     
+    # Hero Cards (V2: Three pillars)
+    st.divider()
+    st.markdown("### 🌐 A Unified Grid for Global Security")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("""
+        <div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #fbbf24;">
+            <h4 style="color:#fbbf24;">🛡️ Public</h4>
+            <p style="color:#94a3b8; font-size:0.9rem;">Report cybercrime, upload evidence, and track status with a unique ID.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #3b82f6;">
+            <h4 style="color:#3b82f6;">🏢 Enterprise</h4>
+            <p style="color:#94a3b8; font-size:0.9rem;">Monitor factory compliance, risk scores, and supply chain health.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+        <div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #22c55e;">
+            <h4 style="color:#22c55e;">🛡️ Agency</h4>
+            <p style="color:#94a3b8; font-size:0.9rem;">Investigate assigned cases with full evidence & actionable intelligence.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.divider()
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🌍 Public Reporting", use_container_width=True):
-            st.session_state.role = "public"
-            st.session_state.logged_in = True
-            st.rerun()
+            st.session_state.role = "public"; st.session_state.logged_in = True; st.rerun()
     with col2:
         if st.button("🏢 Enterprise (MNC)", use_container_width=True):
-            st.session_state.landing_target = "mnc"
-            st.rerun()
+            st.session_state.landing_target = "mnc"; st.rerun()
     with col3:
         if st.button("🛡️ Agency (Police)", use_container_width=True):
-            st.session_state.landing_target = "agency"
-            st.rerun()
+            st.session_state.landing_target = "agency"; st.rerun()
     with col4:
         if st.button("👑 Owner (Admin)", use_container_width=True):
-            st.session_state.landing_target = "admin"
-            st.rerun()
+            st.session_state.landing_target = "admin"; st.rerun()
 
-    if "landing_target" in st.session_state:
-        target = st.session_state.landing_target
+    target = st.session_state.get("landing_target")
+    if target:
         st.divider()
         with st.container():
             st.subheader(f"Login: {target.title()}")
@@ -166,24 +226,13 @@ def landing_page():
             password = st.text_input("Password", type="password")
             if st.button("Authenticate"):
                 if target == "admin" and password == ADMIN_PASSWORD:
-                    st.session_state.logged_in = True
-                    st.session_state.role = "admin"
-                    log_audit("Admin Login")
-                    st.rerun()
+                    st.session_state.logged_in = True; st.session_state.role = "admin"; log_audit("Admin Login"); st.rerun()
                 elif target == "mnc" and identifier in st.session_state.mnc_clients:
                     if st.session_state.mnc_clients[identifier]["password"] == password and st.session_state.mnc_clients[identifier]["active"]:
-                        st.session_state.logged_in = True
-                        st.session_state.role = "mnc"
-                        st.session_state.client = identifier
-                        log_audit(f"MNC Login: {identifier}")
-                        st.rerun()
+                        st.session_state.logged_in = True; st.session_state.role = "mnc"; st.session_state.client = identifier; log_audit(f"MNC Login: {identifier}"); st.rerun()
                 elif target == "agency" and identifier in st.session_state.agencies:
                     if st.session_state.agencies[identifier]["password"] == password and st.session_state.agencies[identifier]["active"]:
-                        st.session_state.logged_in = True
-                        st.session_state.role = "agency"
-                        st.session_state.client = identifier
-                        log_audit(f"Agency Login: {identifier}")
-                        st.rerun()
+                        st.session_state.logged_in = True; st.session_state.role = "agency"; st.session_state.client = identifier; log_audit(f"Agency Login: {identifier}"); st.rerun()
                 else:
                     st.error("Invalid credentials")
 
@@ -224,8 +273,10 @@ def public_dashboard():
                     "evidence_file": file_name,
                     "status": "New",
                     "priority": "Medium",
+                    "assigned_to": "Unassigned",
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "notes": ""
+                    "notes": "",
+                    "timeline": ["New"]  # V2: Initialize timeline
                 }
                 st.session_state.cyber_alerts.append(new_alert)
                 save_all()
@@ -240,10 +291,12 @@ def public_dashboard():
     if st.button("Check Status"):
         found = [a for a in st.session_state.cyber_alerts if a.get("tracking_id") == track]
         if found:
-            st.success(f"Status: {found[0]['status']}")
+            st.success(f"Status: {found[0]['status']} | Assigned to: {found[0].get('assigned_to', 'Pending')}")
+            # Show Timeline for public too
+            st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD
+# ADMIN DASHBOARD (V2: Bell + Timeline)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -253,13 +306,22 @@ def admin_dashboard():
     resolved = len([a for a in st.session_state.cyber_alerts if a['status'] == 'Resolved'])
     views = st.session_state.views_data
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # V2: Notification Bell with count
+    col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 1, 1, 1])
     col1.metric("📊 Reports", total)
     col2.metric("⏳ Pending", pending)
     col3.metric("✅ Resolved", resolved)
-    col4.metric("👁️ Total Views", views["total"])
+    col4.metric("👁️ Views", views["total"])
     col5.metric("📆 Today", views["today"])
+    with col6:
+        st.markdown(f"""
+        <div style="text-align: center; padding-top: 10px;">
+            <span class="notif-bell" style="font-size: 2rem;">🔔</span>
+            <span class="notif-badge" style="position: relative; top: -15px; left: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 8px; font-size: 14px;">{pending}</span>
+        </div>
+        """, unsafe_allow_html=True)
     
+    # Charts
     if st.session_state.cyber_alerts:
         df = pd.DataFrame(st.session_state.cyber_alerts)
         if not df.empty and 'category' in df.columns:
@@ -271,7 +333,7 @@ def admin_dashboard():
                 st.subheader("Status Distribution")
                 st.bar_chart(df['status'].value_counts())
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 Reports", "🏭 Factory", "🌍 Agencies", "📜 Audit Logs"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Reports", "🏭 Factory", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs"])
     
     with tab1:
         search = st.text_input("🔍 Search")
@@ -281,9 +343,12 @@ def admin_dashboard():
         active_reports = [a for a in filtered if a.get('status') != 'Archived']
         if active_reports:
             df = pd.DataFrame(active_reports)
-            st.dataframe(df[['tracking_id', 'name', 'country', 'category', 'status', 'priority', 'time']], use_container_width=True)
+            st.dataframe(df[['tracking_id', 'name', 'country', 'category', 'status', 'priority', 'assigned_to', 'time']], use_container_width=True)
             for alert in active_reports:
                 with st.expander(f"📌 {alert.get('tracking_id')} - {alert.get('name')}"):
+                    # V2: Timeline
+                    st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
+                    
                     col_a, col_b = st.columns([2, 1])
                     with col_a:
                         st.write(f"**Details:** {alert.get('text')}")
@@ -301,9 +366,20 @@ def admin_dashboard():
                             save_all()
                             log_audit(f"Notes updated for {alert.get('tracking_id')}")
                     with col_b:
+                        agency_list = list(st.session_state.agencies.keys())
+                        assigned_to = st.selectbox("Assign to Agency", agency_list, index=agency_list.index(alert.get('assigned_to')) if alert.get('assigned_to') in agency_list else 0, key=f"assign_{alert['id']}")
+                        if assigned_to != alert.get('assigned_to'):
+                            alert['assigned_to'] = assigned_to
+                            # Update timeline
+                            if "Assigned" not in alert.get('timeline', []):
+                                alert['timeline'] = alert.get('timeline', ["New"]) + [f"Assigned to {assigned_to}"]
+                            save_all()
+                            log_audit(f"Assigned {alert.get('tracking_id')} to {assigned_to}")
                         new_status = st.selectbox("Status", ["New", "Under Review", "Resolved", "Closed", "Archived"], index=["New","Under Review","Resolved","Closed","Archived"].index(alert.get('status')), key=f"st_{alert['id']}")
                         if new_status != alert.get('status'):
                             alert['status'] = new_status
+                            if new_status not in alert.get('timeline', []):
+                                alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
                             save_all()
                             log_audit(f"Status changed to {new_status} for {alert.get('tracking_id')}")
                         priority = st.selectbox("Priority", ["Low", "Medium", "High"], index=["Low","Medium","High"].index(alert.get('priority', 'Medium')), key=f"pr_{alert['id']}")
@@ -323,72 +399,171 @@ def admin_dashboard():
             if st.button("Add"):
                 if n:
                     st.session_state.factories.append({"id": len(st.session_state.factories)+1, "name": n, "status": s, "risk": "Low" if s=="Green" else "Medium", "client": c})
-                    save_all()
-                    log_audit(f"Factory Added: {n}")
-                    st.rerun()
+                    save_all(); log_audit(f"Factory Added: {n}"); st.rerun()
         with col2:
             d = st.number_input("Delete ID", min_value=1, step=1)
             if st.button("Delete"):
                 st.session_state.factories = [f for f in st.session_state.factories if f["id"] != d]
-                save_all()
-                log_audit(f"Factory Deleted: ID {d}")
-                st.rerun()
+                save_all(); log_audit(f"Factory Deleted: ID {d}"); st.rerun()
 
     with tab3:
+        st.subheader("Manage MNC Clients")
+        for name, data in st.session_state.mnc_clients.items():
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1: st.write(f"**{name}**")
+            with col2:
+                np = st.text_input(f"Password", value=data["password"], key=f"mp_{name}")
+                if np != data["password"]: st.session_state.mnc_clients[name]["password"] = np; save_all(); log_audit(f"MNC Pass changed: {name}")
+            with col3:
+                active = st.checkbox("Active", value=data["active"], key=f"ma_{name}")
+                if active != data["active"]: st.session_state.mnc_clients[name]["active"] = active; save_all(); st.rerun()
+        st.divider()
+        new_mnc = st.text_input("New MNC Name")
+        new_mnc_pass = st.text_input("Set Password")
+        if st.button("Add MNC"):
+            if new_mnc and new_mnc_pass:
+                st.session_state.mnc_clients[new_mnc] = {"password": new_mnc_pass, "active": True}
+                save_all(); log_audit(f"MNC Added: {new_mnc}"); st.rerun()
+
+    with tab4:
         for name, data in st.session_state.agencies.items():
             col1, col2, col3 = st.columns([2, 2, 1])
             with col1: st.write(f"**{name}**")
             with col2:
                 np = st.text_input(f"Pass", value=data["password"], key=f"ap_{name}")
-                if np != data["password"]:
-                    st.session_state.agencies[name]["password"] = np
-                    save_all()
-                    log_audit(f"Agency Pass changed: {name}")
+                if np != data["password"]: st.session_state.agencies[name]["password"] = np; save_all(); log_audit(f"Agency Pass changed: {name}")
             with col3:
                 active = st.checkbox("Active", value=data["active"], key=f"aa_{name}")
-                if active != data["active"]:
-                    st.session_state.agencies[name]["active"] = active
-                    save_all()
-                    st.rerun()
-        n_ag = st.text_input("New Country")
-        n_pass = st.text_input("Pass")
-        n_hl = st.text_input("Helpline")
+                if active != data["active"]: st.session_state.agencies[name]["active"] = active; save_all(); st.rerun()
+        n_ag = st.text_input("New Country"); n_pass = st.text_input("Pass"); n_hl = st.text_input("Helpline")
         if st.button("Add Agency"):
-            st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}
-            save_all()
-            log_audit(f"Agency Added: {n_ag}")
-            st.rerun()
+            if n_ag and n_pass:
+                st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}
+                save_all(); log_audit(f"Agency Added: {n_ag}"); st.rerun()
 
-    with tab4:
+    with tab5:
         st.subheader("📜 Complete Activity Trail")
         if st.session_state.audit_logs:
             df_audit = pd.DataFrame(st.session_state.audit_logs[::-1])
             st.dataframe(df_audit, use_container_width=True)
+            if st.button("🗑️ Clear All Logs", use_container_width=True):
+                st.session_state.audit_logs.clear()
+                save_json("audit.json", [])
+                st.rerun()
         else:
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC DASHBOARD
+# MNC DASHBOARD (V2: Health Score)
 # ==========================================
 def mnc_dashboard(client):
-    st.header(f"🏢 {client} - Compliance")
+    st.header(f"🏢 {client} - Compliance Dashboard")
+    st.caption("See Risk · Build Trust · Stay Complaint")
+    
     df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client])
-    st.dataframe(df)
+    if not df.empty:
+        total = len(df)
+        green = len(df[df['status'] == 'Green'])
+        yellow = len(df[df['status'] == 'Yellow'])
+        red = len(df[df['status'] == 'Red'])
+        score = (green / total) * 100 if total > 0 else 0
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🏭 Total Factories", total)
+        col2.metric("🟢 Green", green)
+        col3.metric("🟡 Yellow", yellow)
+        col4.metric("🔴 Red", red)
+        
+        st.markdown(f"""
+        <div style="text-align: center; padding: 20px; background: #1e293b; border-radius: 12px; margin: 10px 0;">
+            <p style="color: #94a3b8; margin: 0;">Overall Compliance Health Score</p>
+            <div class="health-score">{round(score)}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.dataframe(df)
+    else:
+        st.info("No factories assigned yet.")
 
 # ==========================================
-# AGENCY DASHBOARD
+# AGENCY DASHBOARD (V2: Charts + Timeline)
 # ==========================================
 def agency_dashboard(agency):
-    st.header(f"🛡️ {agency} - Cases")
-    my_reports = [a for a in st.session_state.cyber_alerts if a.get("country") == agency and a.get('status') != 'Archived']
-    if my_reports:
-        st.dataframe(pd.DataFrame(my_reports)[['tracking_id', 'category', 'status', 'priority', 'notes']])
-        if st.button("📥 Export CSV"):
-            df = pd.DataFrame(my_reports)
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download", csv, "report.csv", "text/csv")
-    else:
-        st.success("✅ No cases.")
+    st.header(f"🛡️ {agency} - Case Investigation Panel")
+    
+    my_reports = [a for a in st.session_state.cyber_alerts if a.get("assigned_to") == agency and a.get('status') != 'Archived']
+    
+    if not my_reports:
+        st.success("✅ No cases assigned to you yet.")
+        return
+
+    st.subheader("📋 Assigned Cases")
+    df = pd.DataFrame(my_reports)
+    st.dataframe(df[['tracking_id', 'category', 'status', 'priority', 'time']], use_container_width=True)
+    
+    # V2: Agency Charts
+    if not df.empty and 'category' in df.columns:
+        st.subheader("📊 Case Analytics")
+        col_ch1, col_ch2 = st.columns(2)
+        with col_ch1:
+            st.bar_chart(df['category'].value_counts())
+        with col_ch2:
+            st.bar_chart(df['status'].value_counts())
+
+    st.divider()
+    st.subheader("📂 Case Files (Complete Details)")
+    
+    for alert in my_reports:
+        with st.expander(f"🔍 Case: {alert.get('tracking_id')} - {alert.get('name')} ({alert.get('status')})"):
+            # V2: Timeline
+            st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
+            
+            col_a, col_b = st.columns([2, 1])
+            with col_a:
+                st.markdown(f"**👤 Name:** {alert.get('name')}")
+                st.markdown(f"**📧 Email:** {alert.get('email', 'N/A')}")
+                st.markdown(f"**🌍 Country:** {alert.get('country')} | **🏙️ City:** {alert.get('city', 'N/A')}")
+                st.markdown(f"**📂 Category:** {alert.get('category')}")
+                st.markdown(f"**🔗 Website/URL:** {alert.get('website', 'N/A')}")
+                st.markdown(f"**📝 Description:**")
+                st.info(alert.get('text'))
+                
+                if alert.get('evidence_file'):
+                    file_path = os.path.join(UPLOAD_DIR, alert['evidence_file'])
+                    if os.path.exists(file_path):
+                        st.markdown("**📎 Evidence Uploaded:**")
+                        if alert['evidence_file'].lower().endswith(('png', 'jpg', 'jpeg')):
+                            st.image(file_path, caption="Evidence Image", width=300)
+                        else:
+                            with open(file_path, "rb") as f:
+                                st.download_button("📥 Download Evidence File", f, file_name=alert['evidence_file'])
+                else:
+                    st.caption("No evidence attached.")
+                
+                notes = st.text_area("📝 Internal Notes (Visible to Admin & Agency)", value=alert.get('notes', ''), key=f"ag_notes_{alert['id']}")
+                if notes != alert.get('notes'):
+                    alert['notes'] = notes
+                    save_all()
+                    log_audit(f"Agency {agency} updated notes for {alert.get('tracking_id')}")
+                    st.success("✅ Notes updated!")
+
+            with col_b:
+                st.markdown("**⚙️ Update Case**")
+                new_status = st.selectbox(
+                    "Status",
+                    ["New", "Under Review", "Resolved", "Closed"],
+                    index=["New", "Under Review", "Resolved", "Closed"].index(alert.get('status')) if alert.get('status') in ["New", "Under Review", "Resolved", "Closed"] else 0,
+                    key=f"ag_st_{alert['id']}"
+                )
+                if new_status != alert.get('status'):
+                    alert['status'] = new_status
+                    if new_status not in alert.get('timeline', []):
+                        alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
+                    save_all()
+                    log_audit(f"Agency {agency} changed status to {new_status} for {alert.get('tracking_id')}")
+                    st.rerun()
+                
+                st.caption(f"🕒 Reported: {alert.get('time')}")
 
 # ==========================================
 # SIDEBAR
@@ -398,34 +573,25 @@ with st.sidebar:
         st.image("logo.png", width=150)
     else:
         st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
-    st.caption("Intelligence · Compliance · Protection · Trust")
+    st.caption("See Risk · Build Trust · Stay Complaint")
     st.divider()
     if st.session_state.get("logged_in", False):
         st.write(f"**User:** `{st.session_state.role}`")
         if st.button("🚪 Logout"):
-            st.session_state.logged_in = False
-            st.session_state.role = None
-            st.session_state.client = None
-            st.session_state.landing_target = None
-            st.rerun()
+            st.session_state.logged_in = False; st.session_state.role = None; st.session_state.client = None; st.session_state.landing_target = None; st.rerun()
 
 # ==========================================
 # MAIN ROUTER
 # ==========================================
-if "landing_target" not in st.session_state:
-    st.session_state.landing_target = None
+if "landing_target" not in st.session_state: st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
     landing_page()
 else:
-    if st.session_state.role == "public":
-        public_dashboard()
-    elif st.session_state.role == "admin":
-        admin_dashboard()
-    elif st.session_state.role == "mnc":
-        mnc_dashboard(st.session_state.client)
-    elif st.session_state.role == "agency":
-        agency_dashboard(st.session_state.client)
+    if st.session_state.role == "public": public_dashboard()
+    elif st.session_state.role == "admin": admin_dashboard()
+    elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
+    elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
 
 # ==========================================
 # FOOTER
