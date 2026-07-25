@@ -16,19 +16,11 @@ st.markdown("""
         * { font-family: 'Inter', sans-serif; }
         .stApp { background: #0a0f1e; }
         .main-header { text-align: center; padding: 30px 20px 20px 20px; background: linear-gradient(135deg, #0a0f1e 0%, #1a2a4a 100%); border-radius: 30px; margin-bottom: 30px; border: 1px solid rgba(251, 191, 36, 0.15); }
-        .main-header .logo-text { font-size: 4.2rem; font-weight: 800; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .main-header .tagline { color: #94a3b8; font-size: 1.1rem; letter-spacing: 2px; -webkit-text-fill-color: #94a3b8; }
-        .main-header .sub-tagline { color: #64748b; font-size: 0.9rem; letter-spacing: 4px; -webkit-text-fill-color: #64748b; margin-top: 5px; }
-        .glass-card { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 20px; transition: 0.3s; }
-        .glass-card:hover { border-color: #fbbf24; transform: translateY(-3px); box-shadow: 0 10px 30px rgba(251, 191, 36, 0.05); }
+        .stMetric { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(5px); border-radius: 12px; border-left: 4px solid #fbbf24; padding: 10px; }
         .stButton > button { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #0a0f1e; font-weight: 700; border: none; border-radius: 12px; padding: 0.6rem 1.5rem; transition: 0.3s; }
         .stButton > button:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); }
-        .stMetric { background: rgba(30, 41, 59, 0.5); backdrop-filter: blur(5px); border-radius: 12px; border-left: 4px solid #fbbf24; padding: 10px; }
         .footer { text-align: center; padding: 30px 0 10px 0; color: #475569; font-size: 0.9rem; border-top: 1px solid #1e293b; margin-top: 40px; }
         .footer a { color: #fbbf24; text-decoration: none; }
-        .sidebar-logo { text-align: center; padding: 10px 0; border-bottom: 1px solid #1e293b; margin-bottom: 15px; }
-        .sidebar-logo h2 { color: #fbbf24; font-weight: 700; margin: 0; }
-        .sidebar-logo small { color: #64748b; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,17 +118,17 @@ def save_uploaded_file(uploaded_file):
 # LANDING PAGE
 # ==========================================
 def landing_page():
-    logo_col, text_col = st.columns([1, 4])
-    with logo_col:
+    col1, col2 = st.columns([1, 4])
+    with col1:
         if os.path.exists("logo.png"):
             st.image("logo.png", width=120)
         else:
             st.markdown("<h1 style='color:#fbbf24;'>⚡</h1>", unsafe_allow_html=True)
-    with text_col:
+    with col2:
         st.markdown(
             """
             <div style="padding-top: 15px;">
-                <div style="font-size: 2.8rem; font-weight: 800; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">E4GRID</div>
+                <div style="font-size: 2.8rem; font-weight: 800; color: #fbbf24;">E4GRID</div>
                 <div style="color: #94a3b8; font-size: 1rem; letter-spacing: 2px;">INTELLIGENCE · COMPLIANCE · PROTECTION · TRUST</div>
                 <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
             </div>
@@ -145,19 +137,25 @@ def landing_page():
         )
     
     st.divider()
+    
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🌍 Public Reporting", use_container_width=True):
-            st.session_state.role = "public"; st.session_state.logged_in = True; st.rerun()
+            st.session_state.role = "public"
+            st.session_state.logged_in = True
+            st.rerun()
     with col2:
         if st.button("🏢 Enterprise (MNC)", use_container_width=True):
-            st.session_state.landing_target = "mnc"; st.rerun()
+            st.session_state.landing_target = "mnc"
+            st.rerun()
     with col3:
         if st.button("🛡️ Agency (Police)", use_container_width=True):
-            st.session_state.landing_target = "agency"; st.rerun()
+            st.session_state.landing_target = "agency"
+            st.rerun()
     with col4:
         if st.button("👑 Owner (Admin)", use_container_width=True):
-            st.session_state.landing_target = "admin"; st.rerun()
+            st.session_state.landing_target = "admin"
+            st.rerun()
 
     if "landing_target" in st.session_state:
         target = st.session_state.landing_target
@@ -168,13 +166,24 @@ def landing_page():
             password = st.text_input("Password", type="password")
             if st.button("Authenticate"):
                 if target == "admin" and password == ADMIN_PASSWORD:
-                    st.session_state.logged_in = True; st.session_state.role = "admin"; log_audit("Admin Login"); st.rerun()
+                    st.session_state.logged_in = True
+                    st.session_state.role = "admin"
+                    log_audit("Admin Login")
+                    st.rerun()
                 elif target == "mnc" and identifier in st.session_state.mnc_clients:
                     if st.session_state.mnc_clients[identifier]["password"] == password and st.session_state.mnc_clients[identifier]["active"]:
-                        st.session_state.logged_in = True; st.session_state.role = "mnc"; st.session_state.client = identifier; log_audit(f"MNC Login: {identifier}"); st.rerun()
+                        st.session_state.logged_in = True
+                        st.session_state.role = "mnc"
+                        st.session_state.client = identifier
+                        log_audit(f"MNC Login: {identifier}")
+                        st.rerun()
                 elif target == "agency" and identifier in st.session_state.agencies:
                     if st.session_state.agencies[identifier]["password"] == password and st.session_state.agencies[identifier]["active"]:
-                        st.session_state.logged_in = True; st.session_state.role = "agency"; st.session_state.client = identifier; log_audit(f"Agency Login: {identifier}"); st.rerun()
+                        st.session_state.logged_in = True
+                        st.session_state.role = "agency"
+                        st.session_state.client = identifier
+                        log_audit(f"Agency Login: {identifier}")
+                        st.rerun()
                 else:
                     st.error("Invalid credentials")
 
@@ -204,11 +213,19 @@ def public_dashboard():
                 tracking_id = generate_tracking_id(country)
                 new_alert = {
                     "id": len(st.session_state.cyber_alerts)+1,
-                    "tracking_id": tracking_id, "name": name if name else "Anonymous",
-                    "email": email, "country": country, "city": city,
-                    "category": category, "text": complaint, "website": website,
-                    "evidence_file": file_name, "status": "New", "priority": "Medium",
-                    "time": datetime.now().strftime("%Y-%m-%d %H:%M"), "notes": ""
+                    "tracking_id": tracking_id,
+                    "name": name if name else "Anonymous",
+                    "email": email,
+                    "country": country,
+                    "city": city,
+                    "category": category,
+                    "text": complaint,
+                    "website": website,
+                    "evidence_file": file_name,
+                    "status": "New",
+                    "priority": "Medium",
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "notes": ""
                 }
                 st.session_state.cyber_alerts.append(new_alert)
                 save_all()
@@ -306,12 +323,16 @@ def admin_dashboard():
             if st.button("Add"):
                 if n:
                     st.session_state.factories.append({"id": len(st.session_state.factories)+1, "name": n, "status": s, "risk": "Low" if s=="Green" else "Medium", "client": c})
-                    save_all(); log_audit(f"Factory Added: {n}"); st.rerun()
+                    save_all()
+                    log_audit(f"Factory Added: {n}")
+                    st.rerun()
         with col2:
             d = st.number_input("Delete ID", min_value=1, step=1)
             if st.button("Delete"):
                 st.session_state.factories = [f for f in st.session_state.factories if f["id"] != d]
-                save_all(); log_audit(f"Factory Deleted: ID {d}"); st.rerun()
+                save_all()
+                log_audit(f"Factory Deleted: ID {d}")
+                st.rerun()
 
     with tab3:
         for name, data in st.session_state.agencies.items():
@@ -319,14 +340,24 @@ def admin_dashboard():
             with col1: st.write(f"**{name}**")
             with col2:
                 np = st.text_input(f"Pass", value=data["password"], key=f"ap_{name}")
-                if np != data["password"]: st.session_state.agencies[name]["password"] = np; save_all(); log_audit(f"Agency Pass changed: {name}")
+                if np != data["password"]:
+                    st.session_state.agencies[name]["password"] = np
+                    save_all()
+                    log_audit(f"Agency Pass changed: {name}")
             with col3:
                 active = st.checkbox("Active", value=data["active"], key=f"aa_{name}")
-                if active != data["active"]: st.session_state.agencies[name]["active"] = active; save_all(); st.rerun()
-        n_ag = st.text_input("New Country"); n_pass = st.text_input("Pass"); n_hl = st.text_input("Helpline")
+                if active != data["active"]:
+                    st.session_state.agencies[name]["active"] = active
+                    save_all()
+                    st.rerun()
+        n_ag = st.text_input("New Country")
+        n_pass = st.text_input("Pass")
+        n_hl = st.text_input("Helpline")
         if st.button("Add Agency"):
             st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}
-            save_all(); log_audit(f"Agency Added: {n_ag}"); st.rerun()
+            save_all()
+            log_audit(f"Agency Added: {n_ag}")
+            st.rerun()
 
     with tab4:
         st.subheader("📜 Complete Activity Trail")
@@ -337,13 +368,16 @@ def admin_dashboard():
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC & AGENCY
+# MNC DASHBOARD
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance")
     df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client])
     st.dataframe(df)
 
+# ==========================================
+# AGENCY DASHBOARD
+# ==========================================
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Cases")
     my_reports = [a for a in st.session_state.cyber_alerts if a.get("country") == agency and a.get('status') != 'Archived']
@@ -378,15 +412,20 @@ with st.sidebar:
 # ==========================================
 # MAIN ROUTER
 # ==========================================
-if "landing_target" not in st.session_state: st.session_state.landing_target = None
+if "landing_target" not in st.session_state:
+    st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
     landing_page()
 else:
-    if st.session_state.role == "public": public_dashboard()
-    elif st.session_state.role == "admin": admin_dashboard()
-    elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
-    elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
+    if st.session_state.role == "public":
+        public_dashboard()
+    elif st.session_state.role == "admin":
+        admin_dashboard()
+    elif st.session_state.role == "mnc":
+        mnc_dashboard(st.session_state.client)
+    elif st.session_state.role == "agency":
+        agency_dashboard(st.session_state.client)
 
 # ==========================================
 # FOOTER
@@ -395,4 +434,6 @@ st.markdown("""
 <div class="footer">
     © 2026 E4GRID. Built with ❤️ for Global Security.
     <br>
-    <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/comp
+    <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a>
+</div>
+""", unsafe_allow_html=True)
