@@ -4,11 +4,9 @@ from datetime import datetime
 import json
 import os
 import random
-import base64
-from io import BytesIO
 
 # ==========================================
-# CONFIG & CUSTOM CSS
+# CONFIG & CSS
 # ==========================================
 st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
 
@@ -17,7 +15,7 @@ st.markdown("""
     <style>
         * { font-family: 'Inter', sans-serif; }
         .stApp { background: #0a0f1e; }
-        .main-header { text-align: center; padding: 40px 20px 20px 20px; background: linear-gradient(135deg, #0a0f1e 0%, #1a2a4a 100%); border-radius: 30px; margin-bottom: 30px; border: 1px solid rgba(251, 191, 36, 0.15); }
+        .main-header { text-align: center; padding: 30px 20px 20px 20px; background: linear-gradient(135deg, #0a0f1e 0%, #1a2a4a 100%); border-radius: 30px; margin-bottom: 30px; border: 1px solid rgba(251, 191, 36, 0.15); }
         .main-header .logo-text { font-size: 4.2rem; font-weight: 800; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .main-header .tagline { color: #94a3b8; font-size: 1.1rem; letter-spacing: 2px; -webkit-text-fill-color: #94a3b8; }
         .main-header .sub-tagline { color: #64748b; font-size: 0.9rem; letter-spacing: 4px; -webkit-text-fill-color: #64748b; margin-top: 5px; }
@@ -125,10 +123,9 @@ def save_uploaded_file(uploaded_file):
     return None
 
 # ==========================================
-# LANDING PAGE (WITH LOGO)
+# LANDING PAGE
 # ==========================================
 def landing_page():
-    # --- LOGO DISPLAY (Agr GitHub par logo.png hai toh dikhega) ---
     logo_col, text_col = st.columns([1, 4])
     with logo_col:
         if os.path.exists("logo.png"):
@@ -136,16 +133,18 @@ def landing_page():
         else:
             st.markdown("<h1 style='color:#fbbf24;'>⚡</h1>", unsafe_allow_html=True)
     with text_col:
-        st.markdown("""
+        st.markdown(
+            """
             <div style="padding-top: 15px;">
                 <div style="font-size: 2.8rem; font-weight: 800; background: linear-gradient(135deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">E4GRID</div>
                 <div style="color: #94a3b8; font-size: 1rem; letter-spacing: 2px;">INTELLIGENCE · COMPLIANCE · PROTECTION · TRUST</div>
                 <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
             </div>
-        """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
     
     st.divider()
-    
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🌍 Public Reporting", use_container_width=True):
@@ -227,7 +226,7 @@ def public_dashboard():
             st.success(f"Status: {found[0]['status']}")
 
 # ==========================================
-# ADMIN
+# ADMIN DASHBOARD
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -358,7 +357,7 @@ def agency_dashboard(agency):
         st.success("✅ No cases.")
 
 # ==========================================
-# SIDEBAR & FOOTER
+# SIDEBAR
 # ==========================================
 with st.sidebar:
     if os.path.exists("logo.png"):
@@ -389,8 +388,11 @@ else:
     elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
     elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
 
+# ==========================================
+# FOOTER
+# ==========================================
 st.markdown("""
 <div class="footer">
     © 2026 E4GRID. Built with ❤️ for Global Security.
     <br>
-    <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4gr
+    <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/comp
