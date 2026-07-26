@@ -6,7 +6,7 @@ import os
 import random
 
 # ==========================================
-# CONFIG & CSS (V2 Premium Look)
+# CONFIG & CSS (Billionaire Gold Theme)
 # ==========================================
 st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
 
@@ -34,6 +34,11 @@ st.markdown("""
         .health-score { font-size: 2.5rem; font-weight: 800; color: #fbbf24; text-align: center; }
         .notif-bell { position: relative; display: inline-block; }
         .notif-badge { position: absolute; top: -5px; right: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: 700; }
+        
+        /* AI Suggestion Badge */
+        .ai-badge { background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .boss-badge { background: #fbbf24; color: black; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .ai-suggestion-box { background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 10px; border-radius: 8px; margin: 5px 0; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -62,8 +67,8 @@ def save_json(filename, data):
 # ==========================================
 if "factories" not in st.session_state:
     st.session_state.factories = load_json("factories.json", [
-        {"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike"},
-        {"id": 2, "name": "Forward Sports", "status": "Green", "risk": "Low", "client": "Nike"},
+        {"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "ai_suggestion": "Green", "human_override": False, "history": []},
+        {"id": 2, "name": "Forward Sports", "status": "Green", "risk": "Low", "client": "Nike", "ai_suggestion": "Green", "human_override": False, "history": []},
     ])
 
 if "mnc_clients" not in st.session_state:
@@ -128,7 +133,16 @@ def save_uploaded_file(uploaded_file):
     return None
 
 # ==========================================
-# HELPER: TIMELINE GENERATOR (V2 Feature)
+# AI SUGGESTION ENGINE (Mock - Phase 3)
+# ==========================================
+def ai_suggest_status(factory_name):
+    """AI mock function: Randomly suggests a status based on 'intelligence'"""
+    suggestions = ["Green", "Yellow", "Red"]
+    weights = [0.6, 0.3, 0.1]  # 60% Green, 30% Yellow, 10% Red
+    return random.choices(suggestions, weights=weights, k=1)[0]
+
+# ==========================================
+# HELPER: TIMELINE GENERATOR
 # ==========================================
 def generate_timeline(current_status):
     steps = ["New", "Under Review", "Resolved", "Closed"]
@@ -154,7 +168,7 @@ def generate_timeline(current_status):
     return html
 
 # ==========================================
-# LANDING PAGE (V2 Upgraded)
+# LANDING PAGE
 # ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
@@ -175,7 +189,6 @@ def landing_page():
             unsafe_allow_html=True
         )
     
-    # Hero Cards (V2: Three pillars)
     st.divider()
     st.markdown("### 🌐 A Unified Grid for Global Security")
     col1, col2, col3 = st.columns(3)
@@ -276,7 +289,7 @@ def public_dashboard():
                     "assigned_to": "Unassigned",
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "notes": "",
-                    "timeline": ["New"]  # V2: Initialize timeline
+                    "timeline": ["New"]
                 }
                 st.session_state.cyber_alerts.append(new_alert)
                 save_all()
@@ -292,11 +305,10 @@ def public_dashboard():
         found = [a for a in st.session_state.cyber_alerts if a.get("tracking_id") == track]
         if found:
             st.success(f"Status: {found[0]['status']} | Assigned to: {found[0].get('assigned_to', 'Pending')}")
-            # Show Timeline for public too
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (V2: Bell + Timeline)
+# ADMIN DASHBOARD (Phase 3: AI Suggestions + Override)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -306,7 +318,6 @@ def admin_dashboard():
     resolved = len([a for a in st.session_state.cyber_alerts if a['status'] == 'Resolved'])
     views = st.session_state.views_data
     
-    # V2: Notification Bell with count
     col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 1, 1, 1])
     col1.metric("📊 Reports", total)
     col2.metric("⏳ Pending", pending)
@@ -321,7 +332,6 @@ def admin_dashboard():
         </div>
         """, unsafe_allow_html=True)
     
-    # Charts
     if st.session_state.cyber_alerts:
         df = pd.DataFrame(st.session_state.cyber_alerts)
         if not df.empty and 'category' in df.columns:
@@ -333,7 +343,7 @@ def admin_dashboard():
                 st.subheader("Status Distribution")
                 st.bar_chart(df['status'].value_counts())
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Reports", "🏭 Factory", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control"])
     
     with tab1:
         search = st.text_input("🔍 Search")
@@ -346,7 +356,6 @@ def admin_dashboard():
             st.dataframe(df[['tracking_id', 'name', 'country', 'category', 'status', 'priority', 'assigned_to', 'time']], use_container_width=True)
             for alert in active_reports:
                 with st.expander(f"📌 {alert.get('tracking_id')} - {alert.get('name')}"):
-                    # V2: Timeline
                     st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
                     
                     col_a, col_b = st.columns([2, 1])
@@ -370,7 +379,6 @@ def admin_dashboard():
                         assigned_to = st.selectbox("Assign to Agency", agency_list, index=agency_list.index(alert.get('assigned_to')) if alert.get('assigned_to') in agency_list else 0, key=f"assign_{alert['id']}")
                         if assigned_to != alert.get('assigned_to'):
                             alert['assigned_to'] = assigned_to
-                            # Update timeline
                             if "Assigned" not in alert.get('timeline', []):
                                 alert['timeline'] = alert.get('timeline', ["New"]) + [f"Assigned to {assigned_to}"]
                             save_all()
@@ -389,23 +397,112 @@ def admin_dashboard():
         else:
             st.success("✅ No active reports.")
     
+    # --- TAB 2: FACTORIES (Phase 3: AI Suggestion + Human Override) ---
     with tab2:
-        st.dataframe(pd.DataFrame(st.session_state.factories))
+        st.subheader("🏭 Factory Compliance (AI Suggested + Boss Verified)")
+        st.caption("🤖 AI scans public data. 👑 You verify and override.")
+        
+        # Stats for Factories
+        total_factories = len(st.session_state.factories)
+        green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
+        yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
+        red = len([f for f in st.session_state.factories if f['status'] == 'Red'])
+        st.metric("📊 Factories Health", f"{green} Green, {yellow} Yellow, {red} Red out of {total_factories}")
+        
+        # Factory Table with AI Suggestions
+        for factory in st.session_state.factories:
+            with st.expander(f"🏭 {factory['name']} (Current: {factory['status']}) - Client: {factory['client']}"):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.write(f"**Factory:** {factory['name']}")
+                    st.write(f"**Client:** {factory['client']}")
+                    st.write(f"**Current Status:** {factory['status']}")
+                    
+                    # AI Suggestion Box (Phase 3)
+                    ai_suggestion = factory.get('ai_suggestion', 'Green')
+                    st.markdown(f"""
+                    <div class="ai-suggestion-box">
+                        <span class="ai-badge">🤖 AI SUGGESTION</span>
+                        <span style="color: #3b82f6; font-weight: 600; margin-left: 10px;">{ai_suggestion}</span>
+                        <span style="color: #94a3b8; font-size: 0.8rem; margin-left: 10px;">(Based on satellite & public data scan)</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Human Override Indicator
+                    if factory.get('human_override', False):
+                        st.markdown(f"""
+                        <div style="background: rgba(251, 191, 36, 0.1); border-left: 4px solid #fbbf24; padding: 10px; border-radius: 8px; margin: 5px 0;">
+                            <span class="boss-badge">👑 BOSS VERIFIED</span>
+                            <span style="color: #fbbf24; margin-left: 10px;">You manually approved this status.</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                with col2:
+                    st.subheader("Update Status")
+                    new_status = st.selectbox(
+                        f"Set Status for {factory['name']}",
+                        ["Green", "Yellow", "Red"],
+                        index=["Green", "Yellow", "Red"].index(factory['status']),
+                        key=f"fact_status_{factory['id']}"
+                    )
+                    if new_status != factory['status']:
+                        factory['status'] = new_status
+                        factory['human_override'] = True  # Mark as human verified
+                        if 'history' not in factory:
+                            factory['history'] = []
+                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Status changed to {new_status}")
+                        save_all()
+                        log_audit(f"Factory {factory['name']} status changed to {new_status} (Human Override)")
+                        st.rerun()
+                
+                with col3:
+                    st.subheader("AI Scan")
+                    if st.button(f"🔄 Run AI Scan for {factory['name']}", key=f"ai_scan_{factory['id']}"):
+                        new_ai_suggestion = ai_suggest_status(factory['name'])
+                        factory['ai_suggestion'] = new_ai_suggestion
+                        # Only auto-apply if no human override
+                        if not factory.get('human_override', False):
+                            factory['status'] = new_ai_suggestion
+                        save_all()
+                        log_audit(f"AI Scan ran for {factory['name']}. Suggested: {new_ai_suggestion}")
+                        st.rerun()
+                    
+                    st.caption("⚡ AI will scan satellite & public data.")
+                
+                # History
+                if factory.get('history'):
+                    st.caption("📜 History:")
+                    for h in factory['history'][-3:]:
+                        st.caption(f"- {h}")
+        
+        # Add New Factory (with AI pre-scan)
+        st.divider()
+        st.subheader("➕ Add New Factory (AI will scan automatically)")
         col1, col2 = st.columns(2)
         with col1:
-            n = st.text_input("Factory Name")
-            c = st.selectbox("Assign", list(st.session_state.mnc_clients.keys()))
-            s = st.selectbox("Status", ["Green", "Yellow", "Red"])
-            if st.button("Add"):
-                if n:
-                    st.session_state.factories.append({"id": len(st.session_state.factories)+1, "name": n, "status": s, "risk": "Low" if s=="Green" else "Medium", "client": c})
-                    save_all(); log_audit(f"Factory Added: {n}"); st.rerun()
+            new_name = st.text_input("Factory Name")
+            new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()))
         with col2:
-            d = st.number_input("Delete ID", min_value=1, step=1)
-            if st.button("Delete"):
-                st.session_state.factories = [f for f in st.session_state.factories if f["id"] != d]
-                save_all(); log_audit(f"Factory Deleted: ID {d}"); st.rerun()
-
+            new_status = st.selectbox("Initial Status", ["Green", "Yellow", "Red"])
+            if st.button("Add Factory with AI Suggestion"):
+                if new_name:
+                    ai_suggestion = ai_suggest_status(new_name)
+                    new_factory = {
+                        "id": len(st.session_state.factories) + 1,
+                        "name": new_name,
+                        "status": new_status,
+                        "risk": "Low" if new_status == "Green" else "Medium" if new_status == "Yellow" else "High",
+                        "client": new_client,
+                        "ai_suggestion": ai_suggestion,
+                        "human_override": False,
+                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Factory added (AI suggested {ai_suggestion})"]
+                    }
+                    st.session_state.factories.append(new_factory)
+                    save_all()
+                    log_audit(f"Factory Added: {new_name} (AI Suggested: {ai_suggestion})")
+                    st.success(f"✅ Factory added! AI Suggestion: {ai_suggestion}")
+                    st.rerun()
+    
     with tab3:
         st.subheader("Manage MNC Clients")
         for name, data in st.session_state.mnc_clients.items():
@@ -453,8 +550,28 @@ def admin_dashboard():
         else:
             st.info("No activities recorded yet.")
 
+    with tab6:
+        st.subheader("🤖 AI Control Center")
+        st.caption("Manage AI settings and scan all factories at once.")
+        
+        if st.button("🔄 Run AI Scan on ALL Factories", use_container_width=True):
+            for factory in st.session_state.factories:
+                ai_suggestion = ai_suggest_status(factory['name'])
+                factory['ai_suggestion'] = ai_suggestion
+                if not factory.get('human_override', False):
+                    factory['status'] = ai_suggestion
+                if 'history' not in factory:
+                    factory['history'] = []
+                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - AI Scan: Suggested {ai_suggestion}")
+            save_all()
+            log_audit("Bulk AI Scan executed on all factories")
+            st.success("✅ AI Scan completed! Check each factory for suggestions.")
+            st.rerun()
+        
+        st.info("💡 AI currently uses mock intelligence. When you're ready, I can integrate real satellite API (Google Earth Engine).")
+
 # ==========================================
-# MNC DASHBOARD (V2: Health Score)
+# MNC DASHBOARD (Health Score)
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance Dashboard")
@@ -486,7 +603,7 @@ def mnc_dashboard(client):
         st.info("No factories assigned yet.")
 
 # ==========================================
-# AGENCY DASHBOARD (V2: Charts + Timeline)
+# AGENCY DASHBOARD
 # ==========================================
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Case Investigation Panel")
@@ -501,7 +618,6 @@ def agency_dashboard(agency):
     df = pd.DataFrame(my_reports)
     st.dataframe(df[['tracking_id', 'category', 'status', 'priority', 'time']], use_container_width=True)
     
-    # V2: Agency Charts
     if not df.empty and 'category' in df.columns:
         st.subheader("📊 Case Analytics")
         col_ch1, col_ch2 = st.columns(2)
@@ -515,7 +631,6 @@ def agency_dashboard(agency):
     
     for alert in my_reports:
         with st.expander(f"🔍 Case: {alert.get('tracking_id')} - {alert.get('name')} ({alert.get('status')})"):
-            # V2: Timeline
             st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
             
             col_a, col_b = st.columns([2, 1])
