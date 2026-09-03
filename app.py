@@ -19,9 +19,9 @@ HEADERS = {
 }
 
 # ==========================================
-# 📌 DEMO REQUEST LINK
+# 📌 DEMO REQUEST LINK (Google Form)
 # ==========================================
-DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"
+DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"  # <-- Yahan apni Google Form link daalein
 
 # ==========================================
 # DATABASE HELPERS
@@ -101,7 +101,6 @@ def save_agencies(data):
 def load_alerts():
     data = db_get("cyber_alerts")
     if data:
-        # Ensure every alert has a country (for old data)
         for item in data:
             if "country" not in item or not item["country"]:
                 item["country"] = "Pakistan"
@@ -173,7 +172,7 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🤖 GLOBAL AI ENGINE
+# 🤖 GLOBAL AI ENGINE (News Scanner + Fallback)
 # ==========================================
 def ai_analyze_factory(factory_name, country="Pakistan"):
     try:
@@ -380,7 +379,7 @@ def public_dashboard():
                     "id": len(st.session_state.cyber_alerts)+1,
                     "tracking_id": tracking_id, "name": name or "Anonymous",
                     "email": email, 
-                    "country": country,  # <-- COUNTRY ZAROORI HAI
+                    "country": country,
                     "city": city,
                     "category": category, "text": complaint, "website": website,
                     "evidence_file": file_name, "status": "New", "priority": "Medium",
@@ -404,7 +403,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (ALL REPORTS)
+# ADMIN DASHBOARD
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -470,7 +469,7 @@ def admin_dashboard():
                         if priority != alert.get('priority'): alert['priority'] = priority; save_all()
         else: st.success("✅ No active reports.")
     
-    # --- FACTORIES ---
+    # --- FACTORIES (FIXED: Unique Keys) ---
     with tab2:
         st.subheader("🏭 Factory Compliance (Global)")
         total_f = len(st.session_state.factories)
@@ -481,8 +480,8 @@ def admin_dashboard():
         
         col_del1, col_del2 = st.columns([1,3])
         with col_del1:
-            del_id = st.number_input("Delete ID", min_value=1, step=1, key="del_fact_id")
-            if st.button("🗑️ Delete"):
+            del_id = st.number_input("Delete ID", min_value=1, step=1, key="del_fact_id_global")
+            if st.button("🗑️ Delete", key="del_fact_btn_global"):
                 found = any(f["id"] == del_id for f in st.session_state.factories)
                 if found:
                     st.session_state.factories = [f for f in st.session_state.factories if f["id"] != del_id]
@@ -491,7 +490,7 @@ def admin_dashboard():
         with col_del2: st.caption("Tip: Check the ID from the list below.")
         st.divider()
         
-        for factory in st.session_state.factories:
+        for idx, factory in enumerate(st.session_state.factories):
             country = factory.get("country", "Pakistan")
             with st.expander(f"🏭 {factory['name']} ({country}) - Status: {factory['status']}"):
                 col1, col2, col3 = st.columns([2,1,1])
@@ -505,20 +504,28 @@ def admin_dashboard():
                     if factory.get('human_override', False):
                         st.markdown(f"""<div style="background:rgba(251,191,36,0.1);border-left:4px solid #fbbf24;padding:10px;border-radius:8px;margin:5px 0;"><span class="boss-badge">👑 BOSS VERIFIED</span> <span style="color:#fbbf24;margin-left:10px;">You manually approved this.</span></div>""", unsafe_allow_html=True)
                 with col2:
-                    new_status = st.selectbox("Override", ["Green","Yellow","Red"], index=["Green","Yellow","Red"].index(factory['status']), key=f"fact_status_{factory['id']}")
+                    current_status_index = ["Green","Yellow","Red"].index(factory['status'])
+                    new_status = st.selectbox("Override", ["Green","Yellow","Red"], index=current_status_index, key=f"fact_status_override_{factory['id']}_{idx}")
                     if new_status != factory['status']:
-                        factory['status'] = new_status; factory['human_override'] = True
+                        factory['status'] = new_status
+                        factory['human_override'] = True
                         if 'history' not in factory: factory['history'] = []
                         factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Boss changed to {new_status}")
-                        save_all(); log_audit(f"Boss changed {factory['name']} to {new_status}"); st.rerun()
+                        save_all()
+                        log_audit(f"Boss changed {factory['name']} to {new_status}")
+                        st.rerun()
                 with col3:
-                    if st.button(f"🔄 AI Scan (Global)", key=f"ai_scan_{factory['id']}"):
+                    if st.button(f"🔄 AI Scan (Global)", key=f"ai_scan_btn_{factory['id']}_{idx}"):
                         suggestion, reason = ai_analyze_factory(factory['name'], country)
-                        factory['ai_suggestion'] = suggestion; factory['ai_reason'] = reason
-                        if not factory.get('human_override', False): factory['status'] = suggestion
+                        factory['ai_suggestion'] = suggestion
+                        factory['ai_reason'] = reason
+                        if not factory.get('human_override', False):
+                            factory['status'] = suggestion
                         if 'history' not in factory: factory['history'] = []
                         factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - AI Scan (Global): {suggestion}")
-                        save_all(); log_audit(f"AI Scanned {factory['name']} ({country}): {suggestion}"); st.rerun()
+                        save_all()
+                        log_audit(f"AI Scanned {factory['name']} ({country}): {suggestion}")
+                        st.rerun()
                 if factory.get('history'):
                     with st.expander("📜 History"):
                         for h in factory['history'][-5:]: st.caption(f"- {h}")
@@ -527,12 +534,12 @@ def admin_dashboard():
         st.subheader("➕ Add New Factory (Global)")
         col_a, col_b = st.columns(2)
         with col_a:
-            new_name = st.text_input("Factory Name")
-            new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()))
-            new_country = st.text_input("Country (e.g., Bangladesh, Vietnam, USA)", "Pakistan")
+            new_name = st.text_input("Factory Name", key="new_fact_name_global")
+            new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()), key="new_fact_client_global")
+            new_country = st.text_input("Country (e.g., Bangladesh, Vietnam, USA)", "Pakistan", key="new_fact_country_global")
         with col_b:
-            new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"])
-            if st.button("Add with Global AI"):
+            new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"], key="new_fact_status_global")
+            if st.button("Add with Global AI", key="add_fact_global_btn"):
                 if new_name:
                     suggestion, reason = ai_analyze_factory(new_name, new_country)
                     new_factory = {
@@ -548,7 +555,10 @@ def admin_dashboard():
                         "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Added (AI suggests {suggestion} for {new_country})"]
                     }
                     st.session_state.factories.append(new_factory)
-                    save_all(); log_audit(f"Factory Added: {new_name} ({new_country})"); st.success(f"✅ Added! AI Suggests: {suggestion} - {reason}"); st.rerun()
+                    save_all()
+                    log_audit(f"Factory Added: {new_name} ({new_country})")
+                    st.success(f"✅ Added! AI Suggests: {suggestion} - {reason}")
+                    st.rerun()
 
     # --- MNCs ---
     with tab3:
@@ -603,15 +613,30 @@ def admin_dashboard():
         st.info("💡 AI now scans Google News for real-time global alerts + fallback logic.")
 
 # ==========================================
-# ✅ AGENCY DASHBOARD (FIXED: Strict Country Filter + Auto-Remove Resolved)
+# MNC DASHBOARD
+# ==========================================
+def mnc_dashboard(client):
+    st.header(f"🏢 {client} - Compliance")
+    df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client])
+    if not df.empty:
+        total = len(df); green = len(df[df['status']=='Green']); yellow = len(df[df['status']=='Yellow']); red = len(df[df['status']=='Red'])
+        score = (green/total)*100
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("🏭 Total", total); col2.metric("🟢 Green", green); col3.metric("🟡 Yellow", yellow); col4.metric("🔴 Red", red)
+        st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Health Score</p><div class="health-score">{round(score)}%</div></div>""", unsafe_allow_html=True)
+        st.dataframe(df[['id', 'name', 'country', 'status', 'risk']])
+    else: st.info("No factories assigned.")
+
+# ==========================================
+# ✅ AGENCY DASHBOARD (Strict Country Filter)
 # ==========================================
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Cyber Crime Dashboard")
     
-    # --- STRICT FILTER: Sirf us country ki reports jo Pending/Under Review hain ---
+    # Strict filter: Sirf us country ki reports jo Pending/Under Review hain
     my_reports = [
         a for a in st.session_state.cyber_alerts 
-        if a.get("country", "").strip() == agency.strip()  # <-- STRICT MATCH
+        if a.get("country", "").strip() == agency.strip() 
         and a.get('status') not in ['Resolved', 'Closed', 'Archived']
     ]
     
@@ -680,21 +705,6 @@ def agency_dashboard(agency):
                     st.rerun()
                 
                 st.caption(f"🕒 Reported: {alert.get('time')}")
-
-# ==========================================
-# MNC DASHBOARD
-# ==========================================
-def mnc_dashboard(client):
-    st.header(f"🏢 {client} - Compliance")
-    df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client])
-    if not df.empty:
-        total = len(df); green = len(df[df['status']=='Green']); yellow = len(df[df['status']=='Yellow']); red = len(df[df['status']=='Red'])
-        score = (green/total)*100
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🏭 Total", total); col2.metric("🟢 Green", green); col3.metric("🟡 Yellow", yellow); col4.metric("🔴 Red", red)
-        st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Health Score</p><div class="health-score">{round(score)}%</div></div>""", unsafe_allow_html=True)
-        st.dataframe(df[['id', 'name', 'country', 'status', 'risk']])
-    else: st.info("No factories assigned.")
 
 # ==========================================
 # MAIN ROUTER
