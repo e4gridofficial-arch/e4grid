@@ -9,14 +9,19 @@ import requests
 # ==========================================
 # 🔥 BOSS: APNI SUPABASE KEYS YAHAN DAALEIN
 # ==========================================
-SUPABASE_URL = "https://necfncjlbprvkymukxgu.supabase.co"   # <-- Yahan Project URL daalo
-SUPABASE_KEY = "sb_publishable_XIU1xm2LNlA2KeMF9M5nSg_JWmYL_Wm"                   # <-- Yahan Publishable key daalo
+SUPABASE_URL = "https://YOUR_PROJECT_REFERENCE.supabase.co"   # <-- Yahan Project URL daalo
+SUPABASE_KEY = "YOUR_PUBLISHABLE_KEY_HERE"                   # <-- Yahan Publishable key daalo
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json"
 }
+
+# ==========================================
+# 📌 DEMO REQUEST LINK
+# ==========================================
+DEMO_FORM_LINK = "https://forms.gle/YOUR_FORM_ID_HERE"
 
 # ==========================================
 # DATABASE HELPERS
@@ -60,8 +65,11 @@ def db_delete(table, match):
 def load_factories():
     data = db_get("factories")
     if data:
+        for item in data:
+            if "country" not in item or not item["country"]:
+                item["country"] = "Pakistan"
         return data
-    return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "ai_suggestion": "Green", "ai_reason": "✅ No violations.", "human_override": False, "history": []}]
+    return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations.", "human_override": False, "history": []}]
 
 def save_factories(data):
     db_delete("factories", {})
@@ -92,7 +100,13 @@ def save_agencies(data):
 
 def load_alerts():
     data = db_get("cyber_alerts")
-    return data if data else []
+    if data:
+        # Ensure every alert has a country (for old data)
+        for item in data:
+            if "country" not in item or not item["country"]:
+                item["country"] = "Pakistan"
+        return data
+    return []
 
 def save_alerts(data):
     db_delete("cyber_alerts", {})
@@ -159,26 +173,42 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# AI ENGINE & TIMELINE
+# 🤖 GLOBAL AI ENGINE
 # ==========================================
-def ai_analyze_factory(factory_name):
+def ai_analyze_factory(factory_name, country="Pakistan"):
+    try:
+        query = f"{factory_name} {country} violation OR pollution OR child labor OR fine OR accident"
+        url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            content = response.text.lower()
+            negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal', 'waste', 'toxic', 'accident', 'hazard', 'cancer']
+            for word in negative_keywords:
+                if word in content:
+                    return "Red", f"⚠️ Recent news mentions '{word}' for this factory in {country}."
+            if "item" in content or "title" in content:
+                return "Yellow", f"🟡 Recent news found for {factory_name} in {country}."
+    except:
+        pass
+
     name_lower = factory_name.lower()
     if "tannery" in name_lower or "leather" in name_lower:
-        return "Red", "⚠️ High Chromium & heavy metal pollutants detected."
+        return "Red", "⚠️ High Chromium & heavy metal pollutants detected (Local Rule)."
     if "waste" in name_lower or "dump" in name_lower:
-        return "Red", "⚠️ Illegal waste dumping detected."
+        return "Red", "⚠️ Illegal waste dumping detected (Local Rule)."
     if "dye" in name_lower or "chemical" in name_lower:
         return "Yellow", "🟡 High chemical usage detected."
     if "sport" in name_lower or "textile" in name_lower:
         return "Green", "✅ Satellite imagery clear."
+    
     hash_val = sum(ord(c) for c in factory_name) % 10
-    if hash_val <= 6:
-        return "Green", "✅ No violations detected."
-    elif hash_val <= 8:
-        return "Yellow", "🟡 Minor anomaly detected."
-    else:
-        return "Red", "🔴 Critical violation flagged."
+    if hash_val <= 6: return "Green", "✅ No violations detected."
+    elif hash_val <= 8: return "Yellow", "🟡 Minor anomaly detected."
+    else: return "Red", "🔴 Critical violation flagged."
 
+# ==========================================
+# TIMELINE GENERATOR
+# ==========================================
 def generate_timeline(current_status):
     steps = ["New", "Under Review", "Resolved", "Closed"]
     status_map = {"New": 0, "Under Review": 1, "Resolved": 2, "Closed": 3}
@@ -203,7 +233,7 @@ def generate_tracking_id(country):
     return f"{code}-{year}-{rand_num}"
 
 # ==========================================
-# SAVE UPLOADED FILE
+# FILE UPLOAD HELPER
 # ==========================================
 DATA_DIR = "data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -249,11 +279,31 @@ st.markdown("""
         .boss-badge { background: #fbbf24; color: black; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .ai-suggestion-box { background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 10px; border-radius: 8px; margin: 5px 0; }
         .ai-reason-text { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
+        .demo-banner { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #0a0f1e; padding: 10px 20px; border-radius: 30px; font-weight: 700; text-align: center; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# LANDING PAGE (Tagline Fixed: Stay Compliant)
+# SIDEBAR
+# ==========================================
+with st.sidebar:
+    if os.path.exists("logo.png"): st.image("logo.png", width=150)
+    else: st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
+    st.caption("See Risk · Build Trust · Stay Compliant")
+    
+    st.divider()
+    st.markdown("### 🚀 Interested in E4GRID?")
+    st.link_button("📌 Book a 15-min Live Demo", DEMO_FORM_LINK, use_container_width=True)
+    st.caption("For Agencies, MNCs, and Enterprises.")
+    st.divider()
+    
+    if st.session_state.get("logged_in", False):
+        st.write(f"**User:** `{st.session_state.role}`")
+        if st.button("🚪 Logout"):
+            st.session_state.logged_in = False; st.session_state.role = None; st.session_state.client = None; st.session_state.landing_target = None; st.rerun()
+
+# ==========================================
+# LANDING PAGE
 # ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
@@ -264,7 +314,7 @@ def landing_page():
         st.markdown(f"""
             <div style="padding-top: 15px;">
                 <div style="font-size: 2.8rem; font-weight: 800; color: #fbbf24;">E4GRID</div>
-                <div class="tagline-gold" style="font-size: 1.1rem; letter-spacing: 2px;">See Risk · Build Trust · <span style="color:#fbbf24;">Stay Compliant</span></div>
+                <div class="tagline-gold" style="font-size: 1.1rem; letter-spacing: 2px;">See Risk · Build Trust · Stay Compliant</div>
                 <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
             </div>
         """, unsafe_allow_html=True)
@@ -329,7 +379,9 @@ def public_dashboard():
                 new_alert = {
                     "id": len(st.session_state.cyber_alerts)+1,
                     "tracking_id": tracking_id, "name": name or "Anonymous",
-                    "email": email, "country": country, "city": city,
+                    "email": email, 
+                    "country": country,  # <-- COUNTRY ZAROORI HAI
+                    "city": city,
                     "category": category, "text": complaint, "website": website,
                     "evidence_file": file_name, "status": "New", "priority": "Medium",
                     "assigned_to": "Unassigned", "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -352,7 +404,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD
+# ADMIN DASHBOARD (ALL REPORTS)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -378,6 +430,7 @@ def admin_dashboard():
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control"])
     
+    # --- REPORTS (Admin sees EVERYTHING) ---
     with tab1:
         search = st.text_input("🔍 Search")
         filtered = st.session_state.cyber_alerts
@@ -417,8 +470,9 @@ def admin_dashboard():
                         if priority != alert.get('priority'): alert['priority'] = priority; save_all()
         else: st.success("✅ No active reports.")
     
+    # --- FACTORIES ---
     with tab2:
-        st.subheader("🏭 Factory Compliance")
+        st.subheader("🏭 Factory Compliance (Global)")
         total_f = len(st.session_state.factories)
         green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
         yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
@@ -438,10 +492,12 @@ def admin_dashboard():
         st.divider()
         
         for factory in st.session_state.factories:
-            with st.expander(f"🏭 {factory['name']} (Status: {factory['status']}) - {factory['client']}"):
+            country = factory.get("country", "Pakistan")
+            with st.expander(f"🏭 {factory['name']} ({country}) - Status: {factory['status']}"):
                 col1, col2, col3 = st.columns([2,1,1])
                 with col1:
                     st.write(f"**Client:** {factory['client']}")
+                    st.write(f"**Country:** {country}")
                     st.write(f"**Current Status:** {factory['status']}")
                     ai_suggestion = factory.get('ai_suggestion','Green')
                     ai_reason = factory.get('ai_reason','No reason.')
@@ -456,32 +512,45 @@ def admin_dashboard():
                         factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Boss changed to {new_status}")
                         save_all(); log_audit(f"Boss changed {factory['name']} to {new_status}"); st.rerun()
                 with col3:
-                    if st.button(f"🔄 AI Scan", key=f"ai_scan_{factory['id']}"):
-                        suggestion, reason = ai_analyze_factory(factory['name'])
+                    if st.button(f"🔄 AI Scan (Global)", key=f"ai_scan_{factory['id']}"):
+                        suggestion, reason = ai_analyze_factory(factory['name'], country)
                         factory['ai_suggestion'] = suggestion; factory['ai_reason'] = reason
                         if not factory.get('human_override', False): factory['status'] = suggestion
                         if 'history' not in factory: factory['history'] = []
-                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - AI Scan: {suggestion}")
-                        save_all(); log_audit(f"AI Scanned {factory['name']}: {suggestion}"); st.rerun()
+                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - AI Scan (Global): {suggestion}")
+                        save_all(); log_audit(f"AI Scanned {factory['name']} ({country}): {suggestion}"); st.rerun()
                 if factory.get('history'):
                     with st.expander("📜 History"):
                         for h in factory['history'][-5:]: st.caption(f"- {h}")
         
         st.divider()
-        st.subheader("➕ Add New Factory")
+        st.subheader("➕ Add New Factory (Global)")
         col_a, col_b = st.columns(2)
         with col_a:
             new_name = st.text_input("Factory Name")
-            new_client = st.selectbox("Assign to", list(st.session_state.mnc_clients.keys()))
+            new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()))
+            new_country = st.text_input("Country (e.g., Bangladesh, Vietnam, USA)", "Pakistan")
         with col_b:
             new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"])
-            if st.button("Add with AI"):
+            if st.button("Add with Global AI"):
                 if new_name:
-                    suggestion, reason = ai_analyze_factory(new_name)
-                    new_factory = {"id": len(st.session_state.factories)+1, "name": new_name, "status": new_status, "risk": "Low" if new_status=="Green" else "Medium", "client": new_client, "ai_suggestion": suggestion, "ai_reason": reason, "human_override": False, "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Added (AI suggests {suggestion})"]}
+                    suggestion, reason = ai_analyze_factory(new_name, new_country)
+                    new_factory = {
+                        "id": len(st.session_state.factories)+1,
+                        "name": new_name,
+                        "status": new_status,
+                        "risk": "Low" if new_status=="Green" else "Medium",
+                        "client": new_client,
+                        "country": new_country,
+                        "ai_suggestion": suggestion,
+                        "ai_reason": reason,
+                        "human_override": False,
+                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Added (AI suggests {suggestion} for {new_country})"]
+                    }
                     st.session_state.factories.append(new_factory)
-                    save_all(); log_audit(f"Factory Added: {new_name}"); st.success(f"✅ Added! AI Suggests: {suggestion}"); st.rerun()
+                    save_all(); log_audit(f"Factory Added: {new_name} ({new_country})"); st.success(f"✅ Added! AI Suggests: {suggestion} - {reason}"); st.rerun()
 
+    # --- MNCs ---
     with tab3:
         for name, data in st.session_state.mnc_clients.items():
             col1, col2, col3 = st.columns([2,2,1])
@@ -496,6 +565,7 @@ def admin_dashboard():
         if st.button("Add MNC"):
             if new_mnc and new_pass: st.session_state.mnc_clients[new_mnc] = {"password": new_pass, "active": True}; save_all(); log_audit(f"MNC Added: {new_mnc}"); st.rerun()
 
+    # --- AGENCIES ---
     with tab4:
         for name, data in st.session_state.agencies.items():
             col1, col2, col3 = st.columns([2,2,1])
@@ -510,6 +580,7 @@ def admin_dashboard():
         if st.button("Add Agency"):
             if n_ag and n_pass: st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}; save_all(); log_audit(f"Agency Added: {n_ag}"); st.rerun()
 
+    # --- AUDIT LOGS ---
     with tab5:
         if st.session_state.audit_logs:
             df_audit = pd.DataFrame(st.session_state.audit_logs[::-1])
@@ -518,19 +589,100 @@ def admin_dashboard():
                 st.session_state.audit_logs.clear(); save_audit([]); st.rerun()
         else: st.info("No logs.")
 
+    # --- AI CONTROL ---
     with tab6:
-        if st.button("🔄 Run AI Scan on ALL Factories", use_container_width=True):
+        if st.button("🔄 Run Global AI Scan on ALL Factories", use_container_width=True):
             for factory in st.session_state.factories:
-                suggestion, reason = ai_analyze_factory(factory['name'])
+                country = factory.get("country", "Pakistan")
+                suggestion, reason = ai_analyze_factory(factory['name'], country)
                 factory['ai_suggestion'] = suggestion; factory['ai_reason'] = reason
                 if not factory.get('human_override', False): factory['status'] = suggestion
                 if 'history' not in factory: factory['history'] = []
-                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI: {suggestion}")
-            save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
-        st.info("💡 AI uses deterministic logic (not random).")
+                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI (Global): {suggestion}")
+            save_all(); log_audit("Bulk Global AI Scan Executed"); st.success("✅ All factories scanned globally!"); st.rerun()
+        st.info("💡 AI now scans Google News for real-time global alerts + fallback logic.")
 
 # ==========================================
-# MNC / AGENCY DASHBOARDS
+# ✅ AGENCY DASHBOARD (FIXED: Strict Country Filter + Auto-Remove Resolved)
+# ==========================================
+def agency_dashboard(agency):
+    st.header(f"🛡️ {agency} - Cyber Crime Dashboard")
+    
+    # --- STRICT FILTER: Sirf us country ki reports jo Pending/Under Review hain ---
+    my_reports = [
+        a for a in st.session_state.cyber_alerts 
+        if a.get("country", "").strip() == agency.strip()  # <-- STRICT MATCH
+        and a.get('status') not in ['Resolved', 'Closed', 'Archived']
+    ]
+    
+    if not my_reports:
+        st.success(f"✅ No pending cases for **{agency}**.")
+        return
+
+    st.subheader(f"📋 Pending Cases ({len(my_reports)})")
+    df = pd.DataFrame(my_reports)
+    st.dataframe(df[['tracking_id', 'category', 'status', 'priority', 'time']], use_container_width=True)
+    
+    if not df.empty and 'category' in df.columns:
+        col1, col2 = st.columns(2)
+        with col1: st.subheader("Category Breakdown"); st.bar_chart(df['category'].value_counts())
+        with col2: st.subheader("Status Distribution"); st.bar_chart(df['status'].value_counts())
+
+    st.divider()
+    st.subheader("📂 Case Files (Full Details)")
+    
+    for alert in my_reports:
+        with st.expander(f"🔍 Case: {alert.get('tracking_id')} - {alert.get('name')} ({alert.get('status')})"):
+            st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
+            
+            col_a, col_b = st.columns([2, 1])
+            with col_a:
+                st.markdown(f"**👤 Name:** {alert.get('name')}")
+                st.markdown(f"**📧 Email:** {alert.get('email', 'N/A')}")
+                st.markdown(f"**🌍 Country:** {alert.get('country')} | **🏙️ City:** {alert.get('city', 'N/A')}")
+                st.markdown(f"**📂 Category:** {alert.get('category')}")
+                st.markdown(f"**📝 Description:**")
+                st.info(alert.get('text'))
+                
+                if alert.get('evidence_file'):
+                    fp = os.path.join(UPLOAD_DIR, alert['evidence_file'])
+                    if os.path.exists(fp):
+                        st.markdown("**📎 Evidence Uploaded:**")
+                        if alert['evidence_file'].lower().endswith(('png', 'jpg', 'jpeg')):
+                            st.image(fp, caption="Evidence Image", width=300)
+                        else:
+                            with open(fp, "rb") as f:
+                                st.download_button("📥 Download Evidence File", f, file_name=alert['evidence_file'])
+                else:
+                    st.caption("No evidence attached.")
+                
+                notes = st.text_area("📝 Internal Notes (Visible to Admin & Agency)", value=alert.get('notes', ''), key=f"ag_notes_{alert['id']}")
+                if notes != alert.get('notes'):
+                    alert['notes'] = notes
+                    save_all()
+                    log_audit(f"Agency {agency} updated notes for {alert.get('tracking_id')}")
+                    st.success("✅ Notes updated!")
+
+            with col_b:
+                st.markdown("**⚙️ Update Case**")
+                new_status = st.selectbox(
+                    "Status",
+                    ["New", "Under Review", "Resolved", "Closed"],
+                    index=["New", "Under Review", "Resolved", "Closed"].index(alert.get('status')) if alert.get('status') in ["New", "Under Review", "Resolved", "Closed"] else 0,
+                    key=f"ag_st_{alert['id']}"
+                )
+                if new_status != alert.get('status'):
+                    alert['status'] = new_status
+                    if new_status not in alert.get('timeline', []):
+                        alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
+                    save_all()
+                    log_audit(f"Agency {agency} changed status to {new_status} for {alert.get('tracking_id')}")
+                    st.rerun()
+                
+                st.caption(f"🕒 Reported: {alert.get('time')}")
+
+# ==========================================
+# MNC DASHBOARD
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance")
@@ -541,53 +693,12 @@ def mnc_dashboard(client):
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("🏭 Total", total); col2.metric("🟢 Green", green); col3.metric("🟡 Yellow", yellow); col4.metric("🔴 Red", red)
         st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Health Score</p><div class="health-score">{round(score)}%</div></div>""", unsafe_allow_html=True)
-        st.dataframe(df)
+        st.dataframe(df[['id', 'name', 'country', 'status', 'risk']])
     else: st.info("No factories assigned.")
 
-def agency_dashboard(agency):
-    st.header(f"🛡️ {agency} - Cases")
-    my_reports = [a for a in st.session_state.cyber_alerts if a.get("assigned_to") == agency and a.get('status') != 'Archived']
-    if not my_reports: st.success("✅ No cases."); return
-    df = pd.DataFrame(my_reports)
-    st.dataframe(df[['tracking_id','category','status','priority','time']])
-    if not df.empty:
-        col1, col2 = st.columns(2)
-        with col1: st.bar_chart(df['category'].value_counts())
-        with col2: st.bar_chart(df['status'].value_counts())
-    for alert in my_reports:
-        with st.expander(f"🔍 {alert.get('tracking_id')}"):
-            st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
-            col_a, col_b = st.columns([2,1])
-            with col_a:
-                st.write(f"**Name:** {alert.get('name')}"); st.write(f"**Details:** {alert.get('text')}")
-                if alert.get('evidence_file'):
-                    fp = os.path.join(UPLOAD_DIR, alert['evidence_file'])
-                    if os.path.exists(fp):
-                        if alert['evidence_file'].lower().endswith(('png','jpg','jpeg')): st.image(fp, width=300)
-                        else:
-                            with open(fp, "rb") as f: st.download_button("📥 Download", f, file_name=alert['evidence_file'])
-                notes = st.text_area("Notes", value=alert.get('notes',''), key=f"ag_notes_{alert['id']}")
-                if notes != alert.get('notes'): alert['notes'] = notes; save_all()
-            with col_b:
-                new_status = st.selectbox("Status", ["New","Under Review","Resolved","Closed"], index=["New","Under Review","Resolved","Closed"].index(alert.get('status')) if alert.get('status') in ["New","Under Review","Resolved","Closed"] else 0, key=f"ag_st_{alert['id']}")
-                if new_status != alert.get('status'):
-                    alert['status'] = new_status
-                    if new_status not in alert.get('timeline', []): alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
-                    save_all(); st.rerun()
-
 # ==========================================
-# SIDEBAR (Tagline Fixed)
+# MAIN ROUTER
 # ==========================================
-with st.sidebar:
-    if os.path.exists("logo.png"): st.image("logo.png", width=150)
-    else: st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
-    st.caption("See Risk · Build Trust · Stay Compliant")
-    st.divider()
-    if st.session_state.get("logged_in", False):
-        st.write(f"**User:** `{st.session_state.role}`")
-        if st.button("🚪 Logout"):
-            st.session_state.logged_in = False; st.session_state.role = None; st.session_state.client = None; st.session_state.landing_target = None; st.rerun()
-
 if "landing_target" not in st.session_state: st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
@@ -598,4 +709,13 @@ else:
     elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
     elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
 
-st.markdown("""<div class="footer">© 2026 E4GRID. Built with ❤️ for Global Security.<br><a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a></div>""", unsafe_allow_html=True)
+# ==========================================
+# FOOTER
+# ==========================================
+st.markdown("""
+<div class="footer">
+    © 2026 E4GRID. Built with ❤️ for Global Security.
+    <br>
+    <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a>
+</div>
+""", unsafe_allow_html=True)
