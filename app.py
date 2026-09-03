@@ -9,8 +9,8 @@ import requests
 # ==========================================
 # 🔥 BOSS: APNI SUPABASE KEYS YAHAN DAALEIN
 # ==========================================
-SUPABASE_URL = "https://YOUR_PROJECT_REFERENCE.supabase.co"   # <-- Yahan Project URL daalo
-SUPABASE_KEY = "YOUR_PUBLISHABLE_KEY_HERE"                   # <-- Yahan Publishable key daalo
+SUPABASE_URL = "https://necfncjlbprvkymukxgu.supabase.co"   # <-- Yahan Project URL daalo
+SUPABASE_KEY = "sb_publishable_XIU1xm2LNlA2KeMF9M5nSg_JWmYL_Wm"                   # <-- Yahan Publishable key daalo
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -21,7 +21,7 @@ HEADERS = {
 # ==========================================
 # 📌 DEMO REQUEST LINK
 # ==========================================
-DEMO_FORM_LINK = "https://forms.gle/YOUR_FORM_ID_HERE"
+DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"
 
 # ==========================================
 # DATABASE HELPERS
