@@ -30,7 +30,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 🏛️ COMPLIANCE RULES (ILO + Local Laws 2024-2025)
+# 🏛️ COMPLIANCE RULES
 # ==========================================
 COMPLIANCE_RULES = {
     "Pakistan": {"min_wage": 32000, "max_hours": 48, "currency": "PKR"},
@@ -40,7 +40,6 @@ COMPLIANCE_RULES = {
     "USA": {"min_wage": 2080, "max_hours": 40, "currency": "USD"},
     "Turkey": {"min_wage": 17002, "max_hours": 45, "currency": "TRY"},
     "Brazil": {"min_wage": 1412, "max_hours": 44, "currency": "BRL"},
-    # Default fallback for other countries
     "Default": {"min_wage": 0, "max_hours": 48, "currency": "USD"}
 }
 
@@ -189,7 +188,7 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🧠 ULTIMATE DATA-DRIVEN AI ENGINE
+# 🧠 AI ENGINE
 # ==========================================
 def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     risk_score = 0
@@ -199,7 +198,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     factory_location = None
     overpass_url = "https://overpass-api.de/api/interpreter"
 
-    # --- 1. OPENSTREETMAP (Location + Water Proximity) ---
+    # --- OSM Location ---
     try:
         query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
         response = requests.get(overpass_url, params={'data': query}, timeout=10)
@@ -218,7 +217,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     except:
         pass
 
-    # --- 2. REAL EPA ECHO API (USA - Fuzzy Matching) ---
+    # --- EPA USA ---
     if country_lower in ["usa", "united states"]:
         try:
             encoded_name = urllib.parse.quote(factory_name)
@@ -254,18 +253,18 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
         except:
             pass
 
-    # --- 3. ILO / WORLD BANK COUNTRY RISK ---
-    high_risk_countries = ["bangladesh", "vietnam", "pakistan", "turkey", "brazil", "indonesia", "ethiopia", "cambodia", "myanmar"]
-    medium_risk_countries = ["thailand", "malaysia", "philippines", "sri lanka", "egypt", "morocco", "colombia", "peru"]
+    # --- ILO Risk ---
+    high_risk = ["bangladesh", "vietnam", "pakistan", "turkey", "brazil", "indonesia", "ethiopia", "cambodia", "myanmar"]
+    medium_risk = ["thailand", "malaysia", "philippines", "sri lanka", "egypt", "morocco", "colombia", "peru"]
     
-    if country_lower in high_risk_countries:
+    if country_lower in high_risk:
         risk_score += 1
         reasons.append(f"⚠️ High industrial risk country ({country}) - ILO/World Bank.")
-    elif country_lower in medium_risk_countries:
+    elif country_lower in medium_risk:
         risk_score += 0.5
         reasons.append(f"🟡 Medium industrial risk country ({country}) - ILO/World Bank.")
 
-    # --- 4. LOCAL RULES (EXTREME CASES) ---
+    # --- Local Rules ---
     if "tannery" in name_lower or "leather" in name_lower:
         risk_score += 2
         reasons.append("🔴 Local Rule: Tannery detected.")
@@ -276,7 +275,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
         risk_score += 1
         reasons.append("🟡 Local Rule: Chemical usage detected.")
 
-    # --- 5. SMART NEWS SCANNER (Optional) ---
+    # --- News ---
     if enable_news:
         try:
             query = f"{factory_name} {country} violation pollution child labor fine"
@@ -294,7 +293,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
         except:
             pass
 
-    # --- 6. APIFY ILAB (Labor - Real Data) ---
+    # --- Apify ILAB ---
     if APIFY_TOKEN:
         try:
             apify_url = "https://api.apify.com/v2/acts/ilab~ilab-supply-chain/runs"
@@ -311,7 +310,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
         except:
             pass
 
-    # --- 7. SENTINEL HUB (Satellite - Real) ---
+    # --- Sentinel ---
     if SENTINEL_CLIENT_ID and SENTINEL_CLIENT_SECRET and factory_location:
         try:
             lat, lon = factory_location
@@ -339,10 +338,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
         except:
             pass
 
-    # --- 8. COMPLIANCE RULES (Wage & Hours Check) ---
-    # This will be applied when CSV is uploaded, not here
-
-    # --- 9. FINAL DECISION ---
+    # --- Final Decision ---
     if risk_score >= 3:
         final_status = "Red"
     elif risk_score >= 0.5:
@@ -358,19 +354,17 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     return final_status, final_reason
 
 # ==========================================
-# 📄 PDF REPORT GENERATOR
+# 📄 PDF FUNCTIONS (FIXED)
 # ==========================================
 def generate_pdf_report(factory_name, country, status, reason, score, rules_check=None):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Title
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, txt="E4GRID - Compliance Report", ln=1, align='C')
     pdf.ln(10)
     
-    # Factory Details
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(50, 10, txt="Factory Name:", ln=0)
     pdf.set_font("Arial", size=12)
@@ -398,7 +392,6 @@ def generate_pdf_report(factory_name, country, status, reason, score, rules_chec
     pdf.set_font("Arial", size=11)
     pdf.multi_cell(0, 8, txt=reason)
     
-    # Compliance Rules Check
     if rules_check:
         pdf.ln(5)
         pdf.set_font("Arial", 'B', 12)
@@ -412,7 +405,8 @@ def generate_pdf_report(factory_name, country, status, reason, score, rules_chec
     pdf.cell(0, 5, txt=f"Generated by E4GRID on {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=1)
     pdf.cell(0, 5, txt="This is an AI-generated report. Human verification recommended.", ln=1)
     
-    return pdf.output(dest='S').encode('latin1', errors='ignore')
+    # FIX: Return bytes directly (no encode needed)
+    return pdf.output(dest='S')
 
 def download_pdf(factory_name, country, status, reason, score, rules_check=None):
     pdf_data = generate_pdf_report(factory_name, country, status, reason, score, rules_check)
@@ -420,32 +414,21 @@ def download_pdf(factory_name, country, status, reason, score, rules_check=None)
     href = f'<a href="data:application/octet-stream;base64,{b64}" download="{factory_name.replace(" ", "_")}_compliance_report.pdf">📥 Download PDF Report</a>'
     return href
 
-# ==========================================
-# ⚖️ COMPLIANCE RULES CHECK (Payroll vs Attendance)
-# ==========================================
 def check_compliance_rules(country, payroll_df, attendance_df):
-    """
-    Check payroll vs attendance against country's rules
-    Returns list of alerts
-    """
     alerts = []
     rules = COMPLIANCE_RULES.get(country, COMPLIANCE_RULES["Default"])
     min_wage = rules.get("min_wage", 0)
     max_hours = rules.get("max_hours", 48)
     
-    if not payroll_df.empty:
-        # Check wages
-        if "wage" in payroll_df.columns:
-            below_min = payroll_df[payroll_df["wage"] < min_wage]
-            if not below_min.empty:
-                alerts.append(f"⚠️ {len(below_min)} workers paid below minimum wage ({rules['currency']} {min_wage}).")
+    if not payroll_df.empty and "wage" in payroll_df.columns:
+        below_min = payroll_df[payroll_df["wage"] < min_wage]
+        if not below_min.empty:
+            alerts.append(f"⚠️ {len(below_min)} workers paid below minimum wage ({rules['currency']} {min_wage}).")
     
-    if not attendance_df.empty:
-        # Check hours
-        if "hours" in attendance_df.columns:
-            over_hours = attendance_df[attendance_df["hours"] > max_hours]
-            if not over_hours.empty:
-                alerts.append(f"⚠️ {len(over_hours)} workers exceeded max working hours ({max_hours} hours/week).")
+    if not attendance_df.empty and "hours" in attendance_df.columns:
+        over_hours = attendance_df[attendance_df["hours"] > max_hours]
+        if not over_hours.empty:
+            alerts.append(f"⚠️ {len(over_hours)} workers exceeded max working hours ({max_hours} hours/week).")
     
     return alerts
 
@@ -743,7 +726,6 @@ def admin_dashboard():
                     df = pd.read_csv(uploaded_file)
                     st.dataframe(df.head(10))
                     
-                    # Compliance check button
                     if st.button("🔍 Check Compliance Rules", key="compliance_check_btn"):
                         country = st.selectbox("Select Country for Rules", list(COMPLIANCE_RULES.keys()), key="compliance_country")
                         alerts = check_compliance_rules(country, df, df)
@@ -914,7 +896,6 @@ def admin_dashboard():
             save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
         st.info("💡 AI uses Data-Driven Intelligence: EPA + ILO + OSM + Sentinel + Smart News.")
 
-    # --- TAB 7: COMPLIANCE RULES ---
     with tab7:
         st.subheader("⚖️ Global Compliance Rules (ILO + Local Laws 2024-2025)")
         st.caption("These rules are automatically applied when checking payroll/attendance data.")
