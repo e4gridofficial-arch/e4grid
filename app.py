@@ -172,38 +172,33 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🤖 FIXED AI ENGINE (News Scanner OFF by Default)
+# 🤖 BALANCED AI ENGINE (News = +1, Critical = +3)
 # ==========================================
 def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     """
-    FIXED: News Scanner OFF by default. Only turns Red for REAL data (EPA, Satellite, Labor).
+    BALANCED INTELLIGENCE ENGINE
+    News ka weight kam hai (1). Critical sources (Labor, EPA) ka weight high (3).
+    News se sirf Yellow tak aayega, Red nahi.
     """
+    risk_score = 0
     reasons = []
-    final_status = "Green"
-    evidence_count = 0
     name_lower = factory_name.lower()
+    factory_location = None
 
-    # --- 1. LOCAL RULES (Human Auditor Style) ---
+    # --- 1. LOCAL RULES (Baseline Score) ---
     if "tannery" in name_lower or "leather" in name_lower:
-        final_status = "Red"
-        reasons.append("⚠️ High Chromium & heavy metal pollutants detected (Local Rule).")
-        evidence_count += 1
+        risk_score += 2
+        reasons.append("🔴 Local Rule: Tannery detected.")
     if "waste" in name_lower or "dump" in name_lower:
-        final_status = "Red"
-        reasons.append("⚠️ Illegal waste dumping detected (Local Rule).")
-        evidence_count += 1
+        risk_score += 2
+        reasons.append("🔴 Local Rule: Waste dumping detected.")
     if "dye" in name_lower or "chemical" in name_lower:
-        if final_status == "Green":
-            final_status = "Yellow"
-        reasons.append("🟡 High chemical usage detected.")
-        evidence_count += 1
+        risk_score += 1
+        reasons.append("🟡 Local Rule: Chemical usage detected.")
     if "sport" in name_lower or "textile" in name_lower or "garment" in name_lower:
-        if final_status == "Green":
-            final_status = "Green"
-            reasons.append("✅ Industry type appears safe (Local Rule).")
-            evidence_count += 1
+        reasons.append("✅ Local Rule: Industry type appears safe.")
 
-    # --- 2. GOOGLE NEWS (FIXED: Only Yellow, and only if enable_news is True) ---
+    # --- 2. NEWS SCANNER (Weight: +1, Only Yellow) ---
     if enable_news:
         try:
             query = f"{factory_name} {country} violation pollution child labor"
@@ -217,33 +212,31 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
                     negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
                     for word in negative_keywords:
                         if word in content:
-                            if final_status != "Red":
-                                final_status = "Yellow"
-                            reasons.append(f"🟡 Recent news mentions '{word}' for this factory (Google News).")
-                            evidence_count += 1
+                            risk_score += 1
+                            reasons.append(f"🟡 Recent news mentions '{word}'.")
                             break
         except:
             pass
 
-    # --- 3. EPA ECHO (Real - USA) ---
-    if country.lower() in ["usa", "united states"]:
-        try:
-            epa_url = f"https://echo.epa.gov/rest/ef/search?q={factory_name}&fields=facility_name,state,regulated_by,active_inspections_count"
-            response = requests.get(epa_url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data and 'data' in data and data['data']:
-                    facility = data['data'][0]
-                    if facility.get('active_inspections_count', 0) > 0:
-                        final_status = "Red"
-                        reasons.append(f"⚠️ Active EPA inspections found for this facility in {country} (EPA ECHO).")
-                        evidence_count += 2
-        except:
-            pass
+    # --- 3. OPENSTREETMAP (Context only) ---
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
+        response = requests.get(overpass_url, params={'data': query}, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('elements'):
+                elem = data['elements'][0]
+                if 'lat' in elem and 'lon' in elem:
+                    factory_location = (elem['lat'], elem['lon'])
+                    reasons.append(f"🌍 Location found (OSM).")
+    except:
+        pass
 
-    # --- 4. SENTINEL HUB (Real - Satellite) ---
-    if SENTINEL_CLIENT_ID and SENTINEL_CLIENT_SECRET:
+    # --- 4. SENTINEL HUB (Satellite - Weight +1) ---
+    if SENTINEL_CLIENT_ID and SENTINEL_CLIENT_SECRET and factory_location:
         try:
+            lat, lon = factory_location
             auth_url = "https://services.sentinel-hub.com/auth/realms/main/protocol/openid-connect/token"
             auth_data = {
                 "client_id": SENTINEL_CLIENT_ID,
@@ -254,52 +247,63 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
             if auth_response.status_code == 200:
                 token = auth_response.json().get('access_token')
                 if token:
-                    reasons.append("🛰️ Satellite imagery scan initiated (Sentinel Hub).")
-                    evidence_count += 1
+                    bbox = f"{lon-0.01},{lat-0.01},{lon+0.01},{lat+0.01}"
+                    wms_url = (
+                        f"https://services.sentinel-hub.com/ogc/wms/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        f"?SERVICE=WMS&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=TRUE"
+                        f"&VERSION=1.3.0&LAYERS=TRUE-COLOR&WIDTH=512&HEIGHT=512&CRS=EPSG:4326"
+                        f"&BBOX={bbox}"
+                    )
+                    img_response = requests.head(wms_url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+                    if img_response.status_code == 200:
+                        risk_score += 1
+                        reasons.append("🛰️ Satellite image retrieved.")
         except:
             pass
 
-    # --- 5. APIFY ILAB (Real - Labor Data) ---
+    # --- 5. APIFY ILAB (Critical - Weight +3) ---
     if APIFY_TOKEN:
         try:
             apify_url = "https://api.apify.com/v2/acts/ilab~ilab-supply-chain/runs"
-            headers = {"Authorization": f"Bearer {APIFY_TOKEN}"}
-            payload = {"country": country}
-            response = requests.post(apify_url, json=payload, headers=headers, timeout=10)
+            headers = {"Authorization": f"Bearer {APIFY_TOKEN}", "Content-Type": "application/json"}
+            payload = {"country": country, "goods": "textile", "waitForFinish": 15}
+            response = requests.post(apify_url, json=payload, headers=headers, timeout=20)
             if response.status_code == 200:
                 data = response.json()
                 if data and data.get('data'):
-                    if data['data'].get('childLabor', False) or data['data'].get('forcedLabor', False):
-                        final_status = "Red"
-                        reasons.append(f"⚠️ Child labor / forced labor flagged for {country} (Apify ILAB).")
-                        evidence_count += 2
+                    labor_data = data['data']
+                    if labor_data.get('childLabor', False) or labor_data.get('forcedLabor', False):
+                        risk_score += 3
+                        reasons.append(f"⚠️ Child/Forced labor flagged (Apify ILAB).")
         except:
             pass
 
-    # --- 6. OPENSTREETMAP (Real - Geographic) ---
-    try:
-        overpass_url = "https://overpass-api.de/api/interpreter"
-        query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
-        response = requests.get(overpass_url, params={'data': query}, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('elements'):
-                reasons.append(f"🌍 Real geographic location data found (OpenStreetMap).")
-                evidence_count += 1
-    except:
-        pass
+    # --- 6. EPA ECHO (Critical - Weight +3) ---
+    if country.lower() in ["usa", "united states"]:
+        try:
+            epa_url = f"https://echo.epa.gov/rest/ef/search?q={factory_name}&fields=facility_name,state,regulated_by,active_inspections_count"
+            response = requests.get(epa_url, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data and 'data' in data and data['data']:
+                    facility = data['data'][0]
+                    if facility.get('active_inspections_count', 0) > 0:
+                        risk_score += 3
+                        reasons.append(f"⚠️ Active EPA inspections found.")
+        except:
+            pass
 
     # --- 7. FINAL DECISION ---
-    if evidence_count >= 2 and final_status != "Green":
+    if risk_score >= 3:
         final_status = "Red"
-    elif evidence_count == 0 and final_status == "Green":
-        reasons = ["✅ No violations detected in any public records, news, or satellite data. All clear."]
-    elif final_status == "Green" and evidence_count > 0:
-        pass
+    elif risk_score >= 1:
+        final_status = "Yellow"
+    else:
+        final_status = "Green"
 
     if not reasons:
         final_status = "Green"
-        reasons = ["✅ No data available. Safe status."]
+        reasons = ["✅ No violations detected. All clear."]
 
     final_reason = " | ".join(reasons)
     return final_status, final_reason
@@ -569,7 +573,7 @@ def admin_dashboard():
         else: st.success("✅ No active reports.")
     
     with tab2:
-        st.subheader("🏭 Factory Compliance")
+        st.subheader("🏭 Factory Compliance (Balanced Weighted AI)")
         total_f = len(st.session_state.factories)
         green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
         yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
@@ -582,7 +586,7 @@ def admin_dashboard():
         if "enable_news" not in st.session_state:
             st.session_state.enable_news = False
         
-        st.toggle("Enable Deep News Scanner (May cause false positives)", value=st.session_state.enable_news, key="news_toggle")
+        st.toggle("Enable News Scanner (Adds +1 Risk)", value=st.session_state.enable_news, key="news_toggle")
         st.session_state.enable_news = st.session_state.news_toggle
         st.caption("✅ Current Mode: " + ("🟢 News ON" if st.session_state.enable_news else "🔴 News OFF (Stable)"))
         
@@ -680,7 +684,7 @@ def admin_dashboard():
                         for h in factory['history'][-5:]: st.caption(f"- {h}")
         
         st.divider()
-        st.subheader("➕ Add New Factory (Global AI)")
+        st.subheader("➕ Add New Factory (Balanced AI)")
         col_a, col_b = st.columns(2)
         with col_a:
             new_name = st.text_input("Factory Name", key="new_fact_name_global")
@@ -755,7 +759,7 @@ def admin_dashboard():
                 if 'history' not in factory: factory['history'] = []
                 factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI Scan")
             save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
-        st.info("💡 AI uses Real Intelligence: Local Rules + EPA + OSM + Satellite + Labor APIs.")
+        st.info("💡 AI uses Balanced Scoring: Local Rules + News (+1) + Critical (+3).")
 
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance")
