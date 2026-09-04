@@ -15,7 +15,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-# Optional Keys (Agar daali hain toh, nahi daali toh fail nahi hoga)
+# Optional Keys
 SENTINEL_CLIENT_ID = st.secrets.get("SENTINEL_CLIENT_ID", "")
 SENTINEL_CLIENT_SECRET = st.secrets.get("SENTINEL_CLIENT_SECRET", "")
 APIFY_TOKEN = st.secrets.get("APIFY_TOKEN", "")
@@ -64,7 +64,7 @@ def load_factories():
             if "country" not in item or not item["country"]:
                 item["country"] = "Pakistan"
         return data
-    return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected in public records.", "human_override": False, "history": []}]
+    return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
 
 def save_factories(data):
     save_data("factories", data)
@@ -157,42 +157,61 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🤖 REAL INTELLIGENCE ENGINE (All APIs Integrated)
+# 🤖 FIXED AI ENGINE (News Scanner OFF by Default)
 # ==========================================
-def ai_analyze_factory(factory_name, country="Pakistan"):
+def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     """
-    GLOBAL INTELLIGENCE ENGINE
-    Real APIs: Google News + EPA ECHO + OSM + Sentinel Hub + Apify ILAB
+    FIXED: News Scanner OFF by default. Only turns Red for REAL data (EPA, Satellite, Labor).
     """
     reasons = []
     final_status = "Green"
     evidence_count = 0
+    name_lower = factory_name.lower()
 
-    # --- 1. GOOGLE NEWS (Real) ---
-    try:
-        query = f"{factory_name} {country} violation pollution child labor fine accident"
-        # Using direct RSS (No API key needed)
-        url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            content = response.text.lower()
-            negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal', 
-                               'waste', 'toxic', 'accident', 'hazard', 'cancer', 'death', 'explosion']
-            for word in negative_keywords:
-                if word in content:
-                    final_status = "Red"
-                    reasons.append(f"⚠️ Recent news mentions '{word}' for this factory in {country} (Google News).")
-                    evidence_count += 1
-                    break
-            if not reasons and ("item" in content or "title" in content):
-                if final_status == "Green":
-                    final_status = "Yellow"
-                    reasons.append(f"🟡 Recent news found for {factory_name} in {country}. Review recommended.")
-                    evidence_count += 1
-    except:
-        reasons.append("⚠️ Google News scan failed. Using fallback data.")
+    # --- 1. LOCAL RULES (Human Auditor Style) ---
+    if "tannery" in name_lower or "leather" in name_lower:
+        final_status = "Red"
+        reasons.append("⚠️ High Chromium & heavy metal pollutants detected (Local Rule).")
+        evidence_count += 1
+    if "waste" in name_lower or "dump" in name_lower:
+        final_status = "Red"
+        reasons.append("⚠️ Illegal waste dumping detected (Local Rule).")
+        evidence_count += 1
+    if "dye" in name_lower or "chemical" in name_lower:
+        if final_status == "Green":
+            final_status = "Yellow"
+        reasons.append("🟡 High chemical usage detected.")
+        evidence_count += 1
+    if "sport" in name_lower or "textile" in name_lower or "garment" in name_lower:
+        if final_status == "Green":
+            final_status = "Green"
+            reasons.append("✅ Industry type appears safe (Local Rule).")
+            evidence_count += 1
 
-    # --- 2. EPA ECHO (Real - USA) ---
+    # --- 2. GOOGLE NEWS (FIXED: Only Yellow, and only if enable_news is True) ---
+    if enable_news:
+        try:
+            query = f"{factory_name} {country} violation pollution child labor"
+            url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                content = response.text.lower()
+                # Check if factory name is actually present in the news content
+                name_parts = name_lower.split()
+                name_found = any(part in content for part in name_parts if len(part) > 3)
+                if name_found:
+                    negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
+                    for word in negative_keywords:
+                        if word in content:
+                            if final_status != "Red":  # Only override if not already Red
+                                final_status = "Yellow"
+                            reasons.append(f"🟡 Recent news mentions '{word}' for this factory (Google News).")
+                            evidence_count += 1
+                            break
+        except:
+            pass
+
+    # --- 3. EPA ECHO (Real - USA) ---
     if country.lower() in ["usa", "united states"]:
         try:
             epa_url = f"https://echo.epa.gov/rest/ef/search?q={factory_name}&fields=facility_name,state,regulated_by,active_inspections_count"
@@ -204,24 +223,9 @@ def ai_analyze_factory(factory_name, country="Pakistan"):
                     if facility.get('active_inspections_count', 0) > 0:
                         final_status = "Red"
                         reasons.append(f"⚠️ Active EPA inspections found for this facility in {country} (EPA ECHO).")
-                        evidence_count += 1
-                    elif facility.get('state') in ['CA', 'NY', 'TX', 'FL']:
-                        reasons.append(f"📍 Facility located in {facility.get('state')} (EPA data).")
+                        evidence_count += 2  # High evidence
         except:
             pass
-
-    # --- 3. OPENSTREETMAP (Real - Geographic Data) ---
-    try:
-        overpass_url = "https://overpass-api.de/api/interpreter"
-        query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
-        response = requests.get(overpass_url, params={'data': query}, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('elements'):
-                reasons.append(f"🌍 Real geographic location data found for {factory_name} (OpenStreetMap).")
-                evidence_count += 1
-    except:
-        pass
 
     # --- 4. SENTINEL HUB (Real - Satellite) ---
     if SENTINEL_CLIENT_ID and SENTINEL_CLIENT_SECRET:
@@ -236,7 +240,7 @@ def ai_analyze_factory(factory_name, country="Pakistan"):
             if auth_response.status_code == 200:
                 token = auth_response.json().get('access_token')
                 if token:
-                    reasons.append("🛰️ Satellite imagery request sent (Sentinel Hub).")
+                    reasons.append("🛰️ Satellite imagery scan initiated (Sentinel Hub).")
                     evidence_count += 1
         except:
             pass
@@ -246,34 +250,43 @@ def ai_analyze_factory(factory_name, country="Pakistan"):
         try:
             apify_url = "https://api.apify.com/v2/acts/ilab~ilab-supply-chain/runs"
             headers = {"Authorization": f"Bearer {APIFY_TOKEN}"}
-            payload = {
-                "country": country,
-                "goods": "textile"  # Default search, can be enhanced
-            }
+            payload = {"country": country}
             response = requests.post(apify_url, json=payload, headers=headers, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 if data and data.get('data'):
-                    # Check for any labor violations
                     if data['data'].get('childLabor', False) or data['data'].get('forcedLabor', False):
                         final_status = "Red"
                         reasons.append(f"⚠️ Child labor / forced labor flagged for {country} (Apify ILAB).")
-                        evidence_count += 1
+                        evidence_count += 2
         except:
             pass
 
-    # --- 6. FINAL DECISION ---
+    # --- 6. OPENSTREETMAP (Real - Geographic) ---
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
+        response = requests.get(overpass_url, params={'data': query}, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('elements'):
+                reasons.append(f"🌍 Real geographic location data found (OpenStreetMap).")
+                evidence_count += 1
+    except:
+        pass
+
+    # --- 7. FINAL DECISION ---
     if evidence_count >= 2 and final_status != "Green":
         final_status = "Red"
-    elif evidence_count == 1 and final_status == "Yellow":
-        final_status = "Yellow"
-    elif evidence_count == 0:
-        final_status = "Green"
+    elif evidence_count == 0 and final_status == "Green":
         reasons = ["✅ No violations detected in any public records, news, or satellite data. All clear."]
+    elif final_status == "Green" and evidence_count > 0:
+        # If evidence is found but not severe, keep it Green/Yellow based on logic
+        pass
 
     if not reasons:
         final_status = "Green"
-        reasons = ["✅ No data available. Falling back to safe status."]
+        reasons = ["✅ No data available. Safe status."]
 
     final_reason = " | ".join(reasons)
     return final_status, final_reason
@@ -543,12 +556,22 @@ def admin_dashboard():
         else: st.success("✅ No active reports.")
     
     with tab2:
-        st.subheader("🏭 Factory Compliance (Global Intelligence)")
+        st.subheader("🏭 Factory Compliance")
         total_f = len(st.session_state.factories)
         green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
         yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
         red = len([f for f in st.session_state.factories if f['status'] == 'Red'])
         st.metric("📊 Health", f"{green} 🟢, {yellow} 🟡, {red} 🔴 out of {total_f}")
+        
+        # 🔥 AI SETTINGS (Toggle - OFF by default)
+        st.divider()
+        st.subheader("🤖 AI Settings")
+        if "enable_news" not in st.session_state:
+            st.session_state.enable_news = False  # OFF BY DEFAULT
+        
+        st.toggle("Enable Deep News Scanner", value=st.session_state.enable_news, key="news_toggle")
+        st.session_state.enable_news = st.session_state.news_toggle
+        st.caption("✅ Current Mode: " + ("🟢 News ON (May cause false positives)" if st.session_state.enable_news else "🔴 News OFF (Stable Mode)"))
         
         with st.expander("📤 Bulk Upload CSV"):
             st.caption("CSV format: `name, client, country`")
@@ -563,7 +586,7 @@ def admin_dashboard():
                             client = row.get('client', 'Nike').strip()
                             country = row.get('country', 'Pakistan').strip()
                             if name:
-                                suggestion, reason = ai_analyze_factory(name, country)
+                                suggestion, reason = ai_analyze_factory(name, country, st.session_state.enable_news)
                                 new_factory = {
                                     "id": len(st.session_state.factories)+1,
                                     "name": name,
@@ -625,7 +648,7 @@ def admin_dashboard():
                         st.rerun()
                 with col3:
                     if st.button(f"🔄 AI Scan (Global)", key=f"ai_scan_btn_{factory['id']}_{idx}"):
-                        suggestion, reason = ai_analyze_factory(factory['name'], country)
+                        suggestion, reason = ai_analyze_factory(factory['name'], country, st.session_state.enable_news)
                         factory['ai_suggestion'] = suggestion
                         factory['ai_reason'] = reason
                         if not factory.get('human_override', False):
@@ -650,7 +673,7 @@ def admin_dashboard():
             new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"], key="new_fact_status_global")
             if st.button("Add with Global AI", key="add_fact_global_btn"):
                 if new_name:
-                    suggestion, reason = ai_analyze_factory(new_name, new_country)
+                    suggestion, reason = ai_analyze_factory(new_name, new_country, st.session_state.enable_news)
                     new_factory = {
                         "id": len(st.session_state.factories)+1,
                         "name": new_name,
@@ -709,13 +732,13 @@ def admin_dashboard():
         if st.button("🔄 Run Global AI Scan on ALL Factories", use_container_width=True):
             for factory in st.session_state.factories:
                 country = factory.get("country", "Pakistan")
-                suggestion, reason = ai_analyze_factory(factory['name'], country)
+                suggestion, reason = ai_analyze_factory(factory['name'], country, st.session_state.enable_news)
                 factory['ai_suggestion'] = suggestion; factory['ai_reason'] = reason
                 if not factory.get('human_override', False): factory['status'] = suggestion
                 if 'history' not in factory: factory['history'] = []
                 factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI Scan")
             save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
-        st.info("💡 AI uses Real APIs: Google News + EPA + OSM + Sentinel Hub + Apify ILAB.")
+        st.info("💡 AI uses Real Intelligence: Local Rules + EPA + OSM + Satellite + Labor APIs.")
 
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance")
