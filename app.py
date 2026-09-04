@@ -15,7 +15,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-# Optional Keys
+# Optional Keys (Agar daali hain toh, nahi daali toh fail nahi hoga)
 SENTINEL_CLIENT_ID = st.secrets.get("SENTINEL_CLIENT_ID", "")
 SENTINEL_CLIENT_SECRET = st.secrets.get("SENTINEL_CLIENT_SECRET", "")
 APIFY_TOKEN = st.secrets.get("APIFY_TOKEN", "")
@@ -55,7 +55,7 @@ def save_data(table, data):
         db_post(table, item)
 
 # ==========================================
-# DATA LOAD FUNCTIONS
+# DATA LOAD FUNCTIONS (FIXED)
 # ==========================================
 def load_factories():
     data = db_get("factories")
@@ -63,11 +63,26 @@ def load_factories():
         for item in data:
             if "country" not in item or not item["country"]:
                 item["country"] = "Pakistan"
+            if "ai_suggestion" not in item:
+                item["ai_suggestion"] = "Green"
+            if "ai_reason" not in item:
+                item["ai_reason"] = "✅ No violations detected."
+            if "human_override" not in item:
+                item["human_override"] = False
+            if "history" not in item:
+                item["history"] = []
         return data
     return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
 
 def save_factories(data):
-    save_data("factories", data)
+    """FIXED: Pehle sari delete karo, phir nayi insert karo"""
+    db_delete_all("factories")
+    if not data:
+        data = [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
+    for item in data:
+        if "id" not in item:
+            item["id"] = len(data) + 1
+        db_post("factories", item)
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -196,14 +211,13 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 content = response.text.lower()
-                # Check if factory name is actually present in the news content
                 name_parts = name_lower.split()
                 name_found = any(part in content for part in name_parts if len(part) > 3)
                 if name_found:
                     negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
                     for word in negative_keywords:
                         if word in content:
-                            if final_status != "Red":  # Only override if not already Red
+                            if final_status != "Red":
                                 final_status = "Yellow"
                             reasons.append(f"🟡 Recent news mentions '{word}' for this factory (Google News).")
                             evidence_count += 1
@@ -223,7 +237,7 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
                     if facility.get('active_inspections_count', 0) > 0:
                         final_status = "Red"
                         reasons.append(f"⚠️ Active EPA inspections found for this facility in {country} (EPA ECHO).")
-                        evidence_count += 2  # High evidence
+                        evidence_count += 2
         except:
             pass
 
@@ -281,7 +295,6 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
     elif evidence_count == 0 and final_status == "Green":
         reasons = ["✅ No violations detected in any public records, news, or satellite data. All clear."]
     elif final_status == "Green" and evidence_count > 0:
-        # If evidence is found but not severe, keep it Green/Yellow based on logic
         pass
 
     if not reasons:
@@ -567,11 +580,11 @@ def admin_dashboard():
         st.divider()
         st.subheader("🤖 AI Settings")
         if "enable_news" not in st.session_state:
-            st.session_state.enable_news = False  # OFF BY DEFAULT
+            st.session_state.enable_news = False
         
-        st.toggle("Enable Deep News Scanner", value=st.session_state.enable_news, key="news_toggle")
+        st.toggle("Enable Deep News Scanner (May cause false positives)", value=st.session_state.enable_news, key="news_toggle")
         st.session_state.enable_news = st.session_state.news_toggle
-        st.caption("✅ Current Mode: " + ("🟢 News ON (May cause false positives)" if st.session_state.enable_news else "🔴 News OFF (Stable Mode)"))
+        st.caption("✅ Current Mode: " + ("🟢 News ON" if st.session_state.enable_news else "🔴 News OFF (Stable)"))
         
         with st.expander("📤 Bulk Upload CSV"):
             st.caption("CSV format: `name, client, country`")
@@ -617,8 +630,12 @@ def admin_dashboard():
                 found = any(f["id"] == del_id for f in st.session_state.factories)
                 if found:
                     st.session_state.factories = [f for f in st.session_state.factories if f["id"] != del_id]
-                    save_all(); log_audit(f"Factory Deleted: ID {del_id}"); st.success(f"✅ Deleted ID {del_id}!"); st.rerun()
-                else: st.error(f"❌ ID {del_id} not found.")
+                    save_all()
+                    log_audit(f"Factory Deleted: ID {del_id}")
+                    st.success(f"✅ Deleted ID {del_id}!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ ID {del_id} not found.")
         with col_del2: st.caption("Tip: Check the ID from the list below.")
         st.divider()
         
