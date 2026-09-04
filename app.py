@@ -7,10 +7,11 @@ import random
 import requests
 
 # ==========================================
-# 🔥 BOSS: APNI SUPABASE KEYS YAHAN DAALEIN
+# 🔒 SECURE: Passwords ab Streamlit Secrets se aayengi
 # ==========================================
-SUPABASE_URL = "https://necfncjlbprvkymukxgu.supabase.co"   # <-- Yahan Project URL daalo
-SUPABASE_KEY = "sb_publishable_XIU1xm2LNlA2KeMF9M5nSg_JWmYL_Wm"                   # <-- Yahan Publishable key daalo
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -155,8 +156,6 @@ if "views_data" not in st.session_state:
     st.session_state.views_data = views
     save_views(views)
 
-ADMIN_PASSWORD = "esha4t4boss"
-
 def log_audit(action, user="System"):
     st.session_state.audit_logs.append({
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -172,7 +171,7 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🤖 GLOBAL AI ENGINE (News Scanner + Fallback)
+# 🤖 GLOBAL AI ENGINE
 # ==========================================
 def ai_analyze_factory(factory_name, country="Pakistan"):
     try:
@@ -429,7 +428,7 @@ def admin_dashboard():
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control"])
     
-    # --- REPORTS (Admin sees EVERYTHING) ---
+    # --- REPORTS ---
     with tab1:
         search = st.text_input("🔍 Search")
         filtered = st.session_state.cyber_alerts
@@ -469,7 +468,7 @@ def admin_dashboard():
                         if priority != alert.get('priority'): alert['priority'] = priority; save_all()
         else: st.success("✅ No active reports.")
     
-    # --- FACTORIES (FIXED: Unique Keys) ---
+    # --- FACTORIES (FIXED) ---
     with tab2:
         st.subheader("🏭 Factory Compliance (Global)")
         total_f = len(st.session_state.factories)
@@ -628,12 +627,11 @@ def mnc_dashboard(client):
     else: st.info("No factories assigned.")
 
 # ==========================================
-# ✅ AGENCY DASHBOARD (Strict Country Filter)
+# ✅ AGENCY DASHBOARD
 # ==========================================
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Cyber Crime Dashboard")
     
-    # Strict filter: Sirf us country ki reports jo Pending/Under Review hain
     my_reports = [
         a for a in st.session_state.cyber_alerts 
         if a.get("country", "").strip() == agency.strip() 
