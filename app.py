@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 🛡️ ULTIMATE SAVE FUNCTION (WITH ERROR DISPLAY)
+# 🛡️ FIXED: DELETE WITH WHERE CLAUSE (db_delete_all)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -38,19 +38,14 @@ def db_post(table, data):
     return response.status_code == 201
 
 def db_delete_all(table):
-    """Force delete all rows"""
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    """FIXED: Supabase requires a WHERE clause. Adding ?id=neq.0 to delete all."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0"
     response = requests.delete(url, headers=HEADERS)
     return response.status_code in [200, 204]
 
 def save_data(table, data):
-    """
-    FIXED: Pehle delete, phir insert. Agar fail ho toh ERROR dikhao.
-    """
-    # 1. DELETE
-    del_url = f"{SUPABASE_URL}/rest/v1/{table}"
-    del_resp = requests.delete(del_url, headers=HEADERS)
-    
+    # 1. DELETE (Ab with WHERE clause, isliye chalega)
+    del_resp = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0", headers=HEADERS)
     if del_resp.status_code not in [200, 204]:
         st.error(f"❌ DELETE FAILED for {table}!\nStatus: {del_resp.status_code}\nMessage: {del_resp.text[:200]}")
         return False
@@ -386,7 +381,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (WITH ERROR DISPLAY)
+# ADMIN DASHBOARD (FIXED)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
