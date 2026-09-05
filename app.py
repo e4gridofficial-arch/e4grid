@@ -5,8 +5,6 @@ import json
 import os
 import random
 import requests
-import time
-import re
 import urllib.parse
 
 # ==========================================
@@ -16,10 +14,6 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 
-SENTINEL_CLIENT_ID = st.secrets.get("SENTINEL_CLIENT_ID", "")
-SENTINEL_CLIENT_SECRET = st.secrets.get("SENTINEL_CLIENT_SECRET", "")
-APIFY_TOKEN = st.secrets.get("APIFY_TOKEN", "")
-
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -27,21 +21,16 @@ HEADERS = {
 }
 
 # ==========================================
-# 🏛️ COMPLIANCE RULES
+# 🏛️ PAKISTAN COMPLIANCE RULES
 # ==========================================
-COMPLIANCE_RULES = {
-    "Pakistan": {"min_wage": 32000, "max_hours": 48, "currency": "PKR"},
-    "Bangladesh": {"min_wage": 12500, "max_hours": 48, "currency": "BDT"},
-    "Vietnam": {"min_wage": 4960000, "max_hours": 48, "currency": "VND"},
-    "India": {"min_wage": 18000, "max_hours": 48, "currency": "INR"},
-    "USA": {"min_wage": 2080, "max_hours": 40, "currency": "USD"},
-    "Turkey": {"min_wage": 17002, "max_hours": 45, "currency": "TRY"},
-    "Brazil": {"min_wage": 1412, "max_hours": 44, "currency": "BRL"},
-    "Default": {"min_wage": 0, "max_hours": 48, "currency": "USD"}
+PAKISTAN_RULES = {
+    "min_wage": 32000,
+    "max_hours": 48,
+    "currency": "PKR"
 }
 
 # ==========================================
-# DATABASE HELPERS
+# ✅ DATABASE HELPERS (FIXED - Permanent Data)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -56,20 +45,27 @@ def db_get(table, select="*", match=None):
 def db_post(table, data):
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     response = requests.post(url, headers=HEADERS, json=data)
-    return response.status_code == 201
+    if response.status_code == 201:
+        return True
+    return False
 
 def db_delete_all(table):
+    """FIXED: Force delete all rows from table"""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     response = requests.delete(url, headers=HEADERS)
-    return response.status_code == 204
+    return response.status_code in [200, 204]
 
 def save_data(table, data):
+    """FIXED: Clear and re-insert data"""
+    # 1. Delete all existing data
     db_delete_all(table)
+    # 2. Insert new data
     for item in data:
         db_post(table, item)
+    return True
 
 # ==========================================
-# DATA LOAD FUNCTIONS
+# DATA LOAD FUNCTIONS (USING FIXED SAVE)
 # ==========================================
 def load_factories():
     data = db_get("factories")
@@ -89,13 +85,7 @@ def load_factories():
     return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
 
 def save_factories(data):
-    db_delete_all("factories")
-    if not data:
-        data = [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
-    for item in data:
-        if "id" not in item:
-            item["id"] = len(data) + 1
-        db_post("factories", item)
+    save_data("factories", data)
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -185,157 +175,62 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🧠 AI ENGINE
+# 🧠 PAKISTAN AI ENGINE
 # ==========================================
-def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
+def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False, evidence=None):
     risk_score = 0
     reasons = []
     name_lower = factory_name.lower()
-    country_lower = country.lower()
-    factory_location = None
-    overpass_url = "https://overpass-api.de/api/interpreter"
-
-    # --- OSM Location ---
-    try:
-        query = f'[out:json];node["name"~"{factory_name}"]["industrial"](around:1000);out;'
-        response = requests.get(overpass_url, params={'data': query}, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('elements'):
-                elem = data['elements'][0]
-                if 'lat' in elem and 'lon' in elem:
-                    factory_location = (elem['lat'], elem['lon'])
-                    reasons.append(f"🌍 Location found (OSM).")
-                    water_query = f'[out:json];node["water"](around:500,{elem["lat"]},{elem["lon"]});out;'
-                    water_response = requests.get(overpass_url, params={'data': water_query}, timeout=10)
-                    if water_response.status_code == 200 and water_response.json().get('elements'):
-                        risk_score += 0.5
-                        reasons.append("⚠️ Industrial location near water body (OSM).")
-    except:
-        pass
-
-    # --- EPA USA ---
-    if country_lower in ["usa", "united states"]:
-        try:
-            encoded_name = urllib.parse.quote(factory_name)
-            epa_url = f"https://echo.epa.gov/rest/ef/search?q={encoded_name}&fields=facility_name,state,city,regulated_by,active_inspections_count,penalties,enforcement_actions"
-            response = requests.get(epa_url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if data and data.get('data') and data['data']:
-                    best_match = None
-                    best_score = 0
-                    for facility in data['data']:
-                        fac_name = facility.get('facility_name', '').lower()
-                        if factory_name.lower() in fac_name or fac_name in factory_name.lower():
-                            best_match = facility
-                            break
-                        name_parts = factory_name.lower().split()
-                        match_count = sum(1 for part in name_parts if part in fac_name)
-                        if match_count > best_score:
-                            best_score = match_count
-                            best_match = facility
-                    if best_match:
-                        if best_match.get('active_inspections_count', 0) > 0:
-                            risk_score += 3
-                            reasons.append(f"⚠️ Active EPA inspections found (USA ECHO).")
-                        if best_match.get('penalties', 0) > 0:
-                            risk_score += 2
-                            reasons.append(f"⚠️ EPA penalties recorded (USA ECHO).")
-                        if best_match.get('enforcement_actions', 0) > 0:
-                            risk_score += 2
-                            reasons.append(f"⚠️ EPA enforcement actions recorded (USA ECHO).")
-                        if best_match.get('city'):
-                            reasons.append(f"📍 Location: {best_match.get('city')}, {best_match.get('state')} (EPA).")
-        except:
-            pass
-
-    # --- ILO Risk ---
-    high_risk = ["bangladesh", "vietnam", "pakistan", "turkey", "brazil", "indonesia", "ethiopia", "cambodia", "myanmar"]
-    medium_risk = ["thailand", "malaysia", "philippines", "sri lanka", "egypt", "morocco", "colombia", "peru"]
     
-    if country_lower in high_risk:
-        risk_score += 1
-        reasons.append(f"⚠️ High industrial risk country ({country}) - ILO/World Bank.")
-    elif country_lower in medium_risk:
-        risk_score += 0.5
-        reasons.append(f"🟡 Medium industrial risk country ({country}) - ILO/World Bank.")
-
-    # --- Local Rules ---
+    # --- 1. EVIDENCE CHECK (Payroll/Attendance) ---
+    if evidence:
+        wage = evidence.get('wage', 0)
+        hours = evidence.get('hours', 0)
+        
+        if wage > 0 and wage < 32000:
+            risk_score += 3
+            reasons.append(f"🔴 EVIDENCE: Wage PKR {wage:,} < minimum (PKR 32,000).")
+        elif wage > 0:
+            reasons.append(f"✅ EVIDENCE: Wage PKR {wage:,} OK.")
+        
+        if hours > 0 and hours > 48:
+            risk_score += 3
+            reasons.append(f"🔴 EVIDENCE: Hours {hours}/week exceed 48.")
+        elif hours > 0:
+            reasons.append(f"✅ EVIDENCE: Hours {hours}/week OK.")
+    
+    # --- 2. LOCAL RULES ---
     if "tannery" in name_lower or "leather" in name_lower:
         risk_score += 2
-        reasons.append("🔴 Local Rule: Tannery detected.")
+        reasons.append("🔴 Industry: Tannery/Leather (High Risk).")
     if "waste" in name_lower or "dump" in name_lower:
         risk_score += 2
-        reasons.append("🔴 Local Rule: Waste dumping detected.")
+        reasons.append("🔴 Industry: Waste dumping.")
     if "dye" in name_lower or "chemical" in name_lower:
         risk_score += 1
-        reasons.append("🟡 Local Rule: Chemical usage detected.")
+        reasons.append("🟡 Industry: Chemical usage.")
+    if "sport" in name_lower or "textile" in name_lower or "garment" in name_lower:
+        reasons.append("✅ Industry: Sports/Textile (Safe).")
 
-    # --- News ---
+    # --- 3. NEWS SCANNER (Optional) ---
     if enable_news:
         try:
-            query = f"{factory_name} {country} violation pollution child labor fine"
+            query = f"{factory_name} Pakistan violation pollution child labor fine"
             url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-US&gl=US&ceid=US:en"
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 content = response.text.lower()
                 if factory_name.lower() in content:
-                    negative_keywords = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
-                    for word in negative_keywords:
+                    neg_words = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
+                    for word in neg_words:
                         if word in content:
                             risk_score += 1
-                            reasons.append(f"🟡 News mentions '{word}' for this factory.")
+                            reasons.append(f"🟡 News mentions '{word}'.")
                             break
         except:
             pass
 
-    # --- Apify ILAB ---
-    if APIFY_TOKEN:
-        try:
-            apify_url = "https://api.apify.com/v2/acts/ilab~ilab-supply-chain/runs"
-            headers = {"Authorization": f"Bearer {APIFY_TOKEN}", "Content-Type": "application/json"}
-            payload = {"country": country, "goods": "textile", "waitForFinish": 15}
-            response = requests.post(apify_url, json=payload, headers=headers, timeout=20)
-            if response.status_code == 200:
-                data = response.json()
-                if data and data.get('data'):
-                    labor_data = data['data']
-                    if labor_data.get('childLabor', False) or labor_data.get('forcedLabor', False):
-                        risk_score += 3
-                        reasons.append(f"⚠️ Child/Forced labor flagged (ILAB).")
-        except:
-            pass
-
-    # --- Sentinel ---
-    if SENTINEL_CLIENT_ID and SENTINEL_CLIENT_SECRET and factory_location:
-        try:
-            lat, lon = factory_location
-            auth_url = "https://services.sentinel-hub.com/auth/realms/main/protocol/openid-connect/token"
-            auth_data = {
-                "client_id": SENTINEL_CLIENT_ID,
-                "client_secret": SENTINEL_CLIENT_SECRET,
-                "grant_type": "client_credentials"
-            }
-            auth_response = requests.post(auth_url, data=auth_data, timeout=10)
-            if auth_response.status_code == 200:
-                token = auth_response.json().get('access_token')
-                if token:
-                    bbox = f"{lon-0.01},{lat-0.01},{lon+0.01},{lat+0.01}"
-                    wms_url = (
-                        f"https://services.sentinel-hub.com/ogc/wms/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                        f"?SERVICE=WMS&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=TRUE"
-                        f"&VERSION=1.3.0&LAYERS=TRUE-COLOR&WIDTH=512&HEIGHT=512&CRS=EPSG:4326"
-                        f"&BBOX={bbox}"
-                    )
-                    img_response = requests.head(wms_url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
-                    if img_response.status_code == 200:
-                        risk_score += 1
-                        reasons.append("🛰️ Satellite image retrieved.")
-        except:
-            pass
-
-    # --- Final Decision ---
+    # --- 4. FINAL DECISION ---
     if risk_score >= 3:
         final_status = "Red"
     elif risk_score >= 0.5:
@@ -345,32 +240,23 @@ def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False):
 
     if not reasons:
         final_status = "Green"
-        reasons = ["✅ No violations detected in public records. All clear."]
+        reasons = ["✅ No violations detected."]
 
     final_reason = f"[Score: {round(risk_score, 1)}] " + " | ".join(reasons)
     return final_status, final_reason
 
-def check_compliance_rules(country, payroll_df, attendance_df):
+def check_pakistan_compliance(payroll_df, attendance_df):
     alerts = []
-    rules = COMPLIANCE_RULES.get(country, COMPLIANCE_RULES["Default"])
-    min_wage = rules.get("min_wage", 0)
-    max_hours = rules.get("max_hours", 48)
-    
     if not payroll_df.empty and "wage" in payroll_df.columns:
-        below_min = payroll_df[payroll_df["wage"] < min_wage]
-        if not below_min.empty:
-            alerts.append(f"⚠️ {len(below_min)} workers paid below minimum wage ({rules['currency']} {min_wage}).")
-    
+        below = payroll_df[payroll_df["wage"] < 32000]
+        if not below.empty:
+            alerts.append(f"⚠️ {len(below)} workers below min wage (PKR 32,000).")
     if not attendance_df.empty and "hours" in attendance_df.columns:
-        over_hours = attendance_df[attendance_df["hours"] > max_hours]
-        if not over_hours.empty:
-            alerts.append(f"⚠️ {len(over_hours)} workers exceeded max working hours ({max_hours} hours/week).")
-    
+        over = attendance_df[attendance_df["hours"] > 48]
+        if not over.empty:
+            alerts.append(f"⚠️ {len(over)} workers exceed 48 hours/week.")
     return alerts
 
-# ==========================================
-# TIMELINE & TRACKING ID
-# ==========================================
 def generate_timeline(current_status):
     steps = ["New", "Under Review", "Resolved", "Closed"]
     status_map = {"New": 0, "Under Review": 1, "Resolved": 2, "Closed": 3}
@@ -394,9 +280,6 @@ def generate_tracking_id(country):
     rand_num = str(random.randint(10000, 99999))
     return f"{code}-{year}-{rand_num}"
 
-# ==========================================
-# FILE UPLOAD
-# ==========================================
 DATA_DIR = "data"
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -412,10 +295,7 @@ def save_uploaded_file(uploaded_file):
         return safe_name
     return None
 
-# ==========================================
-# PAGE CONFIG & CSS
-# ==========================================
-st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="E4GRID - Pakistan Compliance", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -426,7 +306,6 @@ st.markdown("""
         .stButton > button:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); }
         .footer { text-align: center; padding: 30px 0 10px 0; color: #475569; font-size: 0.9rem; border-top: 1px solid #1e293b; margin-top: 40px; }
         .footer a { color: #fbbf24; text-decoration: none; }
-        .tagline-gold { color: #fbbf24; font-weight: 600; letter-spacing: 2px; }
         .timeline-container { display: flex; align-items: center; gap: 5px; margin: 10px 0; flex-wrap: wrap; }
         .timeline-step { display: flex; align-items: center; gap: 5px; }
         .timeline-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -447,17 +326,14 @@ st.markdown("""
 
 DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"
 
-# ==========================================
-# SIDEBAR
-# ==========================================
 with st.sidebar:
     if os.path.exists("logo.png"): st.image("logo.png", width=150)
     else: st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
-    st.caption("See Risk · Build Trust · Stay Compliant")
+    st.caption("🇵🇰 Pakistan Compliance")
     
     st.divider()
     st.markdown("### 🚀 Interested in E4GRID?")
-    st.link_button("📌 Book a 15-min Live Demo", DEMO_FORM_LINK, use_container_width=True)
+    st.link_button("📌 Book a Demo", DEMO_FORM_LINK, use_container_width=True)
     st.caption("For Agencies, MNCs, and Enterprises.")
     st.divider()
     
@@ -470,9 +346,6 @@ with st.sidebar:
             st.session_state.landing_target = None
             st.rerun()
 
-# ==========================================
-# LANDING PAGE
-# ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -482,13 +355,13 @@ def landing_page():
         st.markdown(f"""
             <div style="padding-top: 15px;">
                 <div style="font-size: 2.8rem; font-weight: 800; color: #fbbf24;">E4GRID</div>
-                <div class="tagline-gold" style="font-size: 1.1rem; letter-spacing: 2px;">See Risk · Build Trust · Stay Compliant</div>
-                <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
+                <div style="color: #94a3b8; font-size: 1rem; letter-spacing: 2px;">🇵🇰 Pakistan's Industrial Compliance Grid</div>
+                <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">See Risk · Build Trust · Stay Compliant</div>
             </div>
         """, unsafe_allow_html=True)
     
     st.divider()
-    st.markdown("### 🌐 A Unified Grid for Global Security")
+    st.markdown("### 🇵🇰 Pakistan Compliance Grid")
     col1, col2, col3 = st.columns(3)
     with col1: st.markdown("""<div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #fbbf24;"><h4 style="color:#fbbf24;">🛡️ Public</h4><p style="color:#94a3b8; font-size:0.9rem;">Report cybercrime, upload evidence, and track status.</p></div>""", unsafe_allow_html=True)
     with col2: st.markdown("""<div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #3b82f6;"><h4 style="color:#3b82f6;">🏢 Enterprise</h4><p style="color:#94a3b8; font-size:0.9rem;">Monitor compliance, risk scores, and supply chain health.</p></div>""", unsafe_allow_html=True)
@@ -520,9 +393,6 @@ def landing_page():
                 else:
                     st.error("Invalid credentials")
 
-# ==========================================
-# PUBLIC DASHBOARD
-# ==========================================
 def public_dashboard():
     st.header("🌍 Report Incident")
     with st.form("report_form", clear_on_submit=True):
@@ -570,9 +440,6 @@ def public_dashboard():
             st.success(f"Status: {found[0]['status']} | Assigned to: {found[0].get('assigned_to', 'Pending')}")
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
-# ==========================================
-# ADMIN DASHBOARD
-# ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
     total = len(st.session_state.cyber_alerts)
@@ -595,7 +462,7 @@ def admin_dashboard():
             with col_ch1: st.subheader("Category"); st.bar_chart(df['category'].value_counts())
             with col_ch2: st.subheader("Status"); st.bar_chart(df['status'].value_counts())
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control", "⚖️ Compliance Rules"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control", "🇵🇰 Rules"])
     
     with tab1:
         search = st.text_input("🔍 Search")
@@ -637,40 +504,54 @@ def admin_dashboard():
         else: st.success("✅ No active reports.")
     
     with tab2:
-        st.subheader("🏭 Factory Compliance (Data-Driven AI)")
+        st.subheader("🏭 Factory Compliance (Pakistan Only)")
         total_f = len(st.session_state.factories)
         green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
         yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
         red = len([f for f in st.session_state.factories if f['status'] == 'Red'])
         st.metric("📊 Health", f"{green} 🟢, {yellow} 🟡, {red} 🔴 out of {total_f}")
         
-        # AI Settings
         st.divider()
         st.subheader("🤖 AI Settings")
         if "enable_news" not in st.session_state:
             st.session_state.enable_news = False
-        
-        st.toggle("Enable Smart News Scanner (Exact Match Only)", value=st.session_state.enable_news, key="news_toggle")
+        st.toggle("Enable News Scanner (Pakistan Only)", value=st.session_state.enable_news, key="news_toggle")
         st.session_state.enable_news = st.session_state.news_toggle
-        st.caption("✅ Current Mode: " + ("🟢 News ON" if st.session_state.enable_news else "🔴 News OFF (Data-Driven)"))
+        st.caption("✅ Current Mode: " + ("🟢 News ON" if st.session_state.enable_news else "🔴 News OFF"))
         
-        with st.expander("📤 Bulk Upload CSV - Payroll & Attendance"):
-            st.caption("Upload a CSV with columns: `worker_id, wage, hours, name`")
-            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], key="bulk_csv")
+        with st.expander("📤 Upload Evidence (Payroll/Attendance)"):
+            st.caption("CSV columns: `worker_id, wage, hours, name`")
+            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], key="evidence_csv")
             if uploaded_file is not None:
                 try:
                     df = pd.read_csv(uploaded_file)
                     st.dataframe(df.head(10))
+                    factory_names = [f['name'] for f in st.session_state.factories]
+                    selected_factory = st.selectbox("Select Factory", factory_names, key="evidence_factory_select")
                     
-                    if st.button("🔍 Check Compliance Rules", key="compliance_check_btn"):
-                        country = st.selectbox("Select Country for Rules", list(COMPLIANCE_RULES.keys()), key="compliance_country")
-                        alerts = check_compliance_rules(country, df, df)
-                        if alerts:
-                            st.error("🚨 Compliance Violations Found:")
-                            for alert in alerts:
-                                st.write(f"- {alert}")
-                        else:
-                            st.success("✅ All workers are compliant with minimum wage and working hours.")
+                    if st.button("🔍 Attach Evidence & Re-Scan", key="attach_evidence_btn"):
+                        avg_wage = df['wage'].mean() if 'wage' in df.columns else 0
+                        avg_hours = df['hours'].mean() if 'hours' in df.columns else 0
+                        evidence = {"wage": avg_wage, "hours": avg_hours}
+                        
+                        for factory in st.session_state.factories:
+                            if factory['name'] == selected_factory:
+                                suggestion, reason = ai_analyze_factory(
+                                    factory['name'], 
+                                    factory.get('country', 'Pakistan'), 
+                                    st.session_state.enable_news,
+                                    evidence=evidence
+                                )
+                                factory['ai_suggestion'] = suggestion
+                                factory['ai_reason'] = reason
+                                if not factory.get('human_override', False):
+                                    factory['status'] = suggestion
+                                if 'history' not in factory:
+                                    factory['history'] = []
+                                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Evidence Attached")
+                                save_all()
+                                st.success(f"✅ Evidence attached to {selected_factory}!")
+                                st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
         
@@ -689,7 +570,7 @@ def admin_dashboard():
                     st.rerun()
                 else:
                     st.error(f"❌ ID {del_id} not found.")
-        with col_del2: st.caption("Tip: Check the ID from the list below.")
+        with col_del2: st.caption("Tip: Check ID from list below.")
         st.divider()
         
         for idx, factory in enumerate(st.session_state.factories):
@@ -743,12 +624,12 @@ def admin_dashboard():
                         for h in factory['history'][-5:]: st.caption(f"- {h}")
         
         st.divider()
-        st.subheader("➕ Add New Factory (Data-Driven AI)")
+        st.subheader("➕ Add New Factory (Pakistan Only)")
         col_a, col_b = st.columns(2)
         with col_a:
             new_name = st.text_input("Factory Name", key="new_fact_name_global")
             new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()), key="new_fact_client_global")
-            new_country = st.text_input("Country (e.g., Bangladesh, Vietnam, USA)", "Pakistan", key="new_fact_country_global")
+            new_country = st.text_input("Country", "Pakistan", key="new_fact_country_global")
         with col_b:
             new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"], key="new_fact_status_global")
             if st.button("Add with AI", key="add_fact_global_btn"):
@@ -809,7 +690,7 @@ def admin_dashboard():
         else: st.info("No logs.")
 
     with tab6:
-        if st.button("🔄 Run Global AI Scan on ALL Factories", use_container_width=True):
+        if st.button("🔄 Run AI Scan on ALL Factories", use_container_width=True):
             for factory in st.session_state.factories:
                 country = factory.get("country", "Pakistan")
                 suggestion, reason = ai_analyze_factory(factory['name'], country, st.session_state.enable_news)
@@ -818,39 +699,17 @@ def admin_dashboard():
                 if 'history' not in factory: factory['history'] = []
                 factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI Scan")
             save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
-        st.info("💡 AI uses Data-Driven Intelligence: EPA + ILO + OSM + Sentinel + Smart News.")
+        st.info("🇵🇰 AI uses Pakistan Rules: Min Wage 32,000 PKR | Max Hours 48/week")
 
     with tab7:
-        st.subheader("⚖️ Global Compliance Rules (ILO + Local Laws 2024-2025)")
-        st.caption("These rules are automatically applied when checking payroll/attendance data.")
-        
-        rules_df = pd.DataFrame([
-            {"Country": k, "Min Wage": v["min_wage"], "Max Hours": v["max_hours"], "Currency": v["currency"]}
-            for k, v in COMPLIANCE_RULES.items()
-        ])
-        st.dataframe(rules_df, use_container_width=True)
-        
-        st.divider()
-        st.subheader("📋 Manual Compliance Check (Single Factory)")
-        col1, col2 = st.columns(2)
-        with col1:
-            check_country = st.selectbox("Country", list(COMPLIANCE_RULES.keys()), key="check_country")
-            wage = st.number_input("Monthly Wage", min_value=0, value=30000, key="check_wage")
-        with col2:
-            hours = st.number_input("Weekly Hours", min_value=0, value=40, key="check_hours")
-            if st.button("Check Compliance", key="check_compliance_btn"):
-                rules = COMPLIANCE_RULES.get(check_country, COMPLIANCE_RULES["Default"])
-                alerts = []
-                if wage < rules["min_wage"]:
-                    alerts.append(f"⚠️ Wage ({rules['currency']} {wage}) is below minimum ({rules['currency']} {rules['min_wage']})")
-                if hours > rules["max_hours"]:
-                    alerts.append(f"⚠️ Hours ({hours}) exceed maximum ({rules['max_hours']} hours/week)")
-                if alerts:
-                    st.error("🚨 Violations Found:")
-                    for alert in alerts:
-                        st.write(f"- {alert}")
-                else:
-                    st.success("✅ All rules satisfied.")
+        st.subheader("🇵🇰 Pakistan Compliance Rules")
+        st.markdown(f"""
+        | Rule | Value |
+        |------|-------|
+        | **Minimum Wage** | PKR {PAKISTAN_RULES['min_wage']:,} / month |
+        | **Max Working Hours** | {PAKISTAN_RULES['max_hours']} hours / week |
+        """)
+        st.caption("These rules are applied when checking payroll/attendance data.")
 
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Compliance")
@@ -939,9 +798,6 @@ def agency_dashboard(agency):
                 
                 st.caption(f"🕒 Reported: {alert.get('time')}")
 
-# ==========================================
-# MAIN ROUTER
-# ==========================================
 if "landing_target" not in st.session_state: st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
@@ -952,12 +808,9 @@ else:
     elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
     elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
 
-# ==========================================
-# FOOTER
-# ==========================================
 st.markdown("""
 <div class="footer">
-    © 2026 E4GRID. Built with ❤️ for Global Security.
+    © 2026 E4GRID. 🇵🇰 Pakistan First
     <br>
     <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a>
 </div>
