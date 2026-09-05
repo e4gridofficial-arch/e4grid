@@ -7,7 +7,7 @@ import random
 import requests
 
 # ==========================================
-# 🔒 SECURE: Passwords ab Secrets mein
+# 🔒 SECURE
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 2. DATABASE HELPERS (Permanent Save)
+# DATABASE HELPERS
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -37,15 +37,6 @@ def db_post(table, data):
     response = requests.post(url, headers=HEADERS, json=data)
     return response.status_code == 201
 
-def db_put(table, match, data):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    params = []
-    for key, value in match.items():
-        params.append(f"{key}=eq.{value}")
-    url += "?" + "&".join(params)
-    response = requests.patch(url, headers=HEADERS, json=data)
-    return response.status_code == 200
-
 def db_delete(table, match):
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     params = []
@@ -55,45 +46,38 @@ def db_delete(table, match):
     response = requests.delete(url, headers=HEADERS)
     return response.status_code == 204
 
+def db_delete_all(table):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    response = requests.delete(url, headers=HEADERS)
+    return response.status_code in [200, 204]
+
+def save_data(table, data):
+    db_delete_all(table)
+    for item in data:
+        db_post(table, item)
+
 # ==========================================
-# 3. DATA LOAD FUNCTIONS
+# DATA LOAD FUNCTIONS
 # ==========================================
 def load_factories():
     data = db_get("factories")
     if data:
-        # Ensure new fields exist for old data
         for item in data:
             if "verified" not in item:
                 item["verified"] = False
             if "manual_score" not in item:
-                item["manual_score"] = None
+                item["manual_score"] = 0
             if "manual_status" not in item:
-                item["manual_status"] = None
+                item["manual_status"] = "Green"
             if "manual_reason" not in item:
-                item["manual_reason"] = None
-            if "ai_score" not in item:
-                item["ai_score"] = 0
-            if "ai_status" not in item:
-                item["ai_status"] = "Green"
-            if "ai_reason" not in item:
-                item["ai_reason"] = "No data"
-            if "env_score" not in item:
-                item["env_score"] = 0
-            if "labor_score" not in item:
-                item["labor_score"] = 0
-            if "safety_score" not in item:
-                item["safety_score"] = 0
-            if "mgmt_score" not in item:
-                item["mgmt_score"] = 0
-            if "trans_score" not in item:
-                item["trans_score"] = 0
+                item["manual_reason"] = "No reason provided"
+            if "country" not in item:
+                item["country"] = "Pakistan"
         return data
-    return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "human_override": False, "history": [], "verified": False, "ai_score": 0, "ai_status": "Green", "ai_reason": "No data", "manual_score": None, "manual_status": None, "manual_reason": None, "env_score": 0, "labor_score": 0, "safety_score": 0, "mgmt_score": 0, "trans_score": 0}]
+    return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "manual_score": 85, "manual_status": "Green", "manual_reason": "ISO certified, no violations", "verified": False, "history": []}]
 
 def save_factories(data):
-    db_delete("factories", {})
-    for item in data:
-        db_post("factories", item)
+    save_data("factories", data)
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -102,9 +86,8 @@ def load_mnc_clients():
     return {"Nike": {"password": "Nike@2026", "active": True}, "Adidas": {"password": "Adidas@2026", "active": True}}
 
 def save_mnc_clients(data):
-    db_delete("mnc_clients", {})
-    for name, values in data.items():
-        db_post("mnc_clients", {"name": name, "password": values["password"], "active": values["active"]})
+    transformed = [{"name": k, "password": v["password"], "active": v["active"]} for k, v in data.items()]
+    save_data("mnc_clients", transformed)
 
 def load_agencies():
     data = db_get("agencies")
@@ -113,27 +96,29 @@ def load_agencies():
     return {"Pakistan": {"password": "Pak@1799", "helpline": "1799", "active": True}, "USA": {"password": "FBI@911", "helpline": "911", "active": True}}
 
 def save_agencies(data):
-    db_delete("agencies", {})
-    for name, values in data.items():
-        db_post("agencies", {"name": name, "password": values["password"], "helpline": values["helpline"], "active": values["active"]})
+    transformed = [{"name": k, "password": v["password"], "helpline": v["helpline"], "active": v["active"]} for k, v in data.items()]
+    save_data("agencies", transformed)
 
 def load_alerts():
     data = db_get("cyber_alerts")
-    return data if data else []
+    if data:
+        for item in data:
+            if "priority" not in item:
+                item["priority"] = "Medium"
+            if "notes" not in item:
+                item["notes"] = ""
+        return data
+    return []
 
 def save_alerts(data):
-    db_delete("cyber_alerts", {})
-    for item in data:
-        db_post("cyber_alerts", item)
+    save_data("cyber_alerts", data)
 
 def load_audit():
     data = db_get("audit_logs")
     return data if data else []
 
 def save_audit(data):
-    db_delete("audit_logs", {})
-    for item in data:
-        db_post("audit_logs", item)
+    save_data("audit_logs", data)
 
 def load_views():
     data = db_get("views_data")
@@ -142,11 +127,11 @@ def load_views():
     return {"total": 0, "today": 0, "last_date": None}
 
 def save_views(data):
-    db_delete("views_data", {})
+    db_delete_all("views_data")
     db_post("views_data", data)
 
 # ==========================================
-# 4. SESSION STATE INIT
+# SESSION STATE INIT
 # ==========================================
 if "factories" not in st.session_state:
     st.session_state.factories = load_factories()
@@ -184,54 +169,7 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 5. GLOBAL COMPLIANCE AI ENGINE (New)
-# ==========================================
-def calculate_compliance(env, labor, safety, mgmt, trans):
-    """
-    Weighted Scoring Formula:
-    Env 30%, Labor 25%, Safety 20%, Mgmt 15%, Trans 10%
-    """
-    score = (env * 0.30) + (labor * 0.25) + (safety * 0.20) + (mgmt * 0.15) + (trans * 0.10)
-    score = round(score, 1)
-    
-    if score >= 80:
-        status = "Green"
-        reason = "✅ Excellent compliance. All standards met."
-    elif score >= 50:
-        status = "Yellow"
-        reason = "🟡 Moderate compliance. Some improvements needed."
-    else:
-        status = "Red"
-        reason = "🔴 High risk. Immediate action required."
-    
-    return score, status, reason
-
-def generate_reason_smart(env, labor, safety, mgmt, trans):
-    reasons = []
-    if env < 50: reasons.append("Environment: Poor (Needs EPA/ISO check)")
-    elif env < 80: reasons.append("Environment: Average")
-    else: reasons.append("Environment: Excellent")
-    
-    if labor < 50: reasons.append("Labor: High risk (Wages/Child labor)")
-    elif labor < 80: reasons.append("Labor: Needs review")
-    else: reasons.append("Labor: Compliant")
-    
-    if safety < 50: reasons.append("Safety: Critical issues")
-    elif safety < 80: reasons.append("Safety: Minor issues")
-    else: reasons.append("Safety: Safe")
-    
-    if mgmt < 50: reasons.append("Mgmt: Poor documentation")
-    elif mgmt < 80: reasons.append("Mgmt: Needs update")
-    else: reasons.append("Mgmt: Strong")
-    
-    if trans < 50: reasons.append("Transparency: Hidden")
-    elif trans < 80: reasons.append("Transparency: Partial")
-    else: reasons.append("Transparency: Open")
-    
-    return " | ".join(reasons)
-
-# ==========================================
-# 6. HELPER FUNCTIONS
+# HELPERS
 # ==========================================
 def generate_timeline(current_status):
     steps = ["New", "Under Review", "Resolved", "Closed"]
@@ -272,7 +210,7 @@ def save_uploaded_file(uploaded_file):
     return None
 
 # ==========================================
-# 7. PAGE CONFIG & CSS
+# PAGE CONFIG & CSS
 # ==========================================
 st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
@@ -296,24 +234,22 @@ st.markdown("""
         .health-score { font-size: 2.5rem; font-weight: 800; color: #fbbf24; text-align: center; }
         .notif-bell { position: relative; display: inline-block; }
         .notif-badge { position: absolute; top: -5px; right: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: 700; }
-        .ai-badge { background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
-        .boss-badge { background: #fbbf24; color: black; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .verified-badge { background: #22c55e; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
-        .ai-suggestion-box { background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 10px; border-radius: 8px; margin: 5px 0; }
+        .boss-badge { background: #fbbf24; color: black; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .ai-suggestion-box { background: rgba(30, 41, 59, 0.5); border-left: 4px solid #fbbf24; padding: 10px; border-radius: 8px; margin: 5px 0; }
         .ai-reason-text { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
-        .score-badge { font-weight: 600; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; }
     </style>
 """, unsafe_allow_html=True)
 
 DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"
 
 # ==========================================
-# 8. SIDEBAR
+# SIDEBAR
 # ==========================================
 with st.sidebar:
     if os.path.exists("logo.png"): st.image("logo.png", width=150)
     else: st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
-    st.caption("Cyber · Compliance · Global")
+    st.caption("Cyber · Compliance · Trust")
     st.divider()
     st.markdown("### 🚀 Interested in E4GRID?")
     st.link_button("📌 Book a Demo", DEMO_FORM_LINK, use_container_width=True)
@@ -329,7 +265,7 @@ with st.sidebar:
             st.rerun()
 
 # ==========================================
-# 9. LANDING PAGE
+# LANDING PAGE
 # ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
@@ -368,18 +304,29 @@ def landing_page():
             password = st.text_input("Password", type="password")
             if st.button("Authenticate"):
                 if target == "admin" and password == ADMIN_PASSWORD:
-                    st.session_state.logged_in = True; st.session_state.role = "admin"; log_audit("Admin Login"); st.rerun()
+                    st.session_state.logged_in = True
+                    st.session_state.role = "admin"
+                    log_audit("Admin Login")
+                    st.rerun()
                 elif target == "mnc" and identifier in st.session_state.mnc_clients:
                     if st.session_state.mnc_clients[identifier]["password"] == password and st.session_state.mnc_clients[identifier]["active"]:
-                        st.session_state.logged_in = True; st.session_state.role = "mnc"; st.session_state.client = identifier; log_audit(f"MNC Login: {identifier}"); st.rerun()
+                        st.session_state.logged_in = True
+                        st.session_state.role = "mnc"
+                        st.session_state.client = identifier
+                        log_audit(f"MNC Login: {identifier}")
+                        st.rerun()
                 elif target == "agency" and identifier in st.session_state.agencies:
                     if st.session_state.agencies[identifier]["password"] == password and st.session_state.agencies[identifier]["active"]:
-                        st.session_state.logged_in = True; st.session_state.role = "agency"; st.session_state.client = identifier; log_audit(f"Agency Login: {identifier}"); st.rerun()
+                        st.session_state.logged_in = True
+                        st.session_state.role = "agency"
+                        st.session_state.client = identifier
+                        log_audit(f"Agency Login: {identifier}")
+                        st.rerun()
                 else:
                     st.error("Invalid credentials")
 
 # ==========================================
-# 10. PUBLIC DASHBOARD (Unchanged)
+# PUBLIC DASHBOARD
 # ==========================================
 def public_dashboard():
     st.header("🌍 Report Incident")
@@ -404,16 +351,25 @@ def public_dashboard():
                 tracking_id = generate_tracking_id(country)
                 new_alert = {
                     "id": len(st.session_state.cyber_alerts)+1,
-                    "tracking_id": tracking_id, "name": name or "Anonymous",
-                    "email": email, "country": country, "city": city,
-                    "category": category, "text": complaint, "website": website,
-                    "evidence_file": file_name, "status": "New", "priority": "Medium",
-                    "assigned_to": "Unassigned", "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "notes": "", "timeline": ["New"]
+                    "tracking_id": tracking_id,
+                    "name": name or "Anonymous",
+                    "email": email,
+                    "country": country,
+                    "city": city,
+                    "category": category,
+                    "text": complaint,
+                    "website": website,
+                    "evidence_file": file_name,
+                    "status": "New",
+                    "priority": "Medium",
+                    "assigned_to": "Unassigned",
+                    "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "notes": "",
+                    "timeline": ["New"]
                 }
                 st.session_state.cyber_alerts.append(new_alert)
                 save_all()
-                log_audit(f"Report Submitted: {tracking_id}")
+                log_audit(f"Public Report Submitted: {tracking_id}")
                 st.success(f"✅ Report Submitted! Tracking ID: **{tracking_id}**")
             else:
                 st.error("Please describe the incident.")
@@ -428,33 +384,41 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# 11. ADMIN DASHBOARD (UPGRADED: Verified System)
+# ADMIN DASHBOARD (MANUAL MODE)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
+    
+    # Stats
     total = len(st.session_state.cyber_alerts)
     pending = len([a for a in st.session_state.cyber_alerts if a['status'] not in ['Resolved', 'Closed', 'Archived']])
     resolved = len([a for a in st.session_state.cyber_alerts if a['status'] == 'Resolved'])
     views = st.session_state.views_data
+    total_factories = len(st.session_state.factories)
+    verified_factories = len([f for f in st.session_state.factories if f.get('verified', False)])
     
     col1, col2, col3, col4, col5, col6 = st.columns([2,1,1,1,1,1])
     col1.metric("📊 Cyber Reports", total)
     col2.metric("⏳ Pending", pending)
     col3.metric("✅ Resolved", resolved)
-    col4.metric("👁️ Views", views["total"])
-    col5.metric("📆 Today", views["today"])
-    with col6:
-        st.markdown(f"""<div style="text-align: center; padding-top: 10px;"><span class="notif-bell" style="font-size: 2rem;">🔔</span><span class="notif-badge" style="position: relative; top: -15px; left: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 8px; font-size: 14px;">{pending}</span></div>""", unsafe_allow_html=True)
+    col4.metric("🏭 Factories", total_factories)
+    col5.metric("✅ Verified", verified_factories)
+    col6.metric("👁️ Views", views["total"])
     
     if st.session_state.cyber_alerts:
         df = pd.DataFrame(st.session_state.cyber_alerts)
         if not df.empty and 'category' in df.columns:
             col_ch1, col_ch2 = st.columns(2)
-            with col_ch1: st.subheader("Category Breakdown"); st.bar_chart(df['category'].value_counts())
-            with col_ch2: st.subheader("Status Distribution"); st.bar_chart(df['status'].value_counts())
+            with col_ch1:
+                st.subheader("Category Breakdown")
+                st.bar_chart(df['category'].value_counts())
+            with col_ch2:
+                st.subheader("Status Distribution")
+                st.bar_chart(df['status'].value_counts())
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Cyber Reports", "🏭 Factories (Verified)", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "📊 Compliance"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Cyber Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs"])
     
+    # --- TAB 1: CYBER REPORTS ---
     with tab1:
         search = st.text_input("🔍 Search")
         filtered = st.session_state.cyber_alerts
@@ -467,285 +431,299 @@ def admin_dashboard():
             for alert in active:
                 with st.expander(f"📌 {alert.get('tracking_id')}"):
                     st.markdown(generate_timeline(alert.get('status')), unsafe_allow_html=True)
-                    col_a, col_b = st.columns([2,1])
+                    col_a, col_b = st.columns([2, 1])
                     with col_a:
                         st.write(f"**Details:** {alert.get('text')}")
                         if alert.get('evidence_file'):
                             fp = os.path.join(UPLOAD_DIR, alert['evidence_file'])
                             if os.path.exists(fp):
-                                if alert['evidence_file'].lower().endswith(('png','jpg','jpeg')): st.image(fp, width=300)
+                                if alert['evidence_file'].lower().endswith(('png','jpg','jpeg')):
+                                    st.image(fp, width=300)
                                 else:
-                                    with open(fp, "rb") as f: st.download_button("📥 Download", f, file_name=alert['evidence_file'])
-                        notes = st.text_area("Notes", value=alert.get('notes',''), key=f"notes_{alert['id']}")
-                        if notes != alert.get('notes'): alert['notes'] = notes; save_all(); log_audit(f"Notes updated {alert.get('tracking_id')}")
+                                    with open(fp, "rb") as f:
+                                        st.download_button("📥 Download", f, file_name=alert['evidence_file'])
+                        
+                        # Priority
+                        priority = st.selectbox(
+                            "Priority",
+                            ["Low", "Medium", "High"],
+                            index=["Low", "Medium", "High"].index(alert.get('priority', 'Medium')),
+                            key=f"pri_{alert['id']}"
+                        )
+                        if priority != alert.get('priority'):
+                            alert['priority'] = priority
+                            save_all()
+                            log_audit(f"Priority updated for {alert.get('tracking_id')} to {priority}")
+                        
+                        # Notes (Agency can see these)
+                        notes = st.text_area("Internal Notes", value=alert.get('notes', ''), key=f"notes_{alert['id']}")
+                        if notes != alert.get('notes'):
+                            alert['notes'] = notes
+                            save_all()
+                            log_audit(f"Notes updated for {alert.get('tracking_id')}")
                     with col_b:
+                        # Assign to Agency
                         agency_list = list(st.session_state.agencies.keys())
-                        assigned = st.selectbox("Assign", agency_list, index=agency_list.index(alert.get('assigned_to')) if alert.get('assigned_to') in agency_list else 0, key=f"assign_{alert['id']}")
+                        assigned = st.selectbox(
+                            "Assign to Agency",
+                            agency_list,
+                            index=agency_list.index(alert.get('assigned_to')) if alert.get('assigned_to') in agency_list else 0,
+                            key=f"assign_{alert['id']}"
+                        )
                         if assigned != alert.get('assigned_to'):
                             alert['assigned_to'] = assigned
-                            if "Assigned" not in alert.get('timeline', []): alert['timeline'] = alert.get('timeline', ["New"]) + [f"Assigned to {assigned}"]
+                            if "Assigned" not in alert.get('timeline', []):
+                                alert['timeline'] = alert.get('timeline', ["New"]) + [f"Assigned to {assigned}"]
                             save_all()
-                        new_status = st.selectbox("Status", ["New","Under Review","Resolved","Closed","Archived"], index=["New","Under Review","Resolved","Closed","Archived"].index(alert.get('status')), key=f"st_{alert['id']}")
+                            log_audit(f"Assigned {alert.get('tracking_id')} to {assigned}")
+                        
+                        # Status (Agency can update)
+                        new_status = st.selectbox(
+                            "Status",
+                            ["New", "Under Review", "Resolved", "Closed", "Archived"],
+                            index=["New", "Under Review", "Resolved", "Closed", "Archived"].index(alert.get('status')),
+                            key=f"st_{alert['id']}"
+                        )
                         if new_status != alert.get('status'):
                             alert['status'] = new_status
-                            if new_status not in alert.get('timeline', []): alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
+                            if new_status not in alert.get('timeline', []):
+                                alert['timeline'] = alert.get('timeline', ["New"]) + [new_status]
                             save_all()
-                        priority = st.selectbox("Priority", ["Low","Medium","High"], index=["Low","Medium","High"].index(alert.get('priority','Medium')), key=f"pr_{alert['id']}")
-                        if priority != alert.get('priority'): alert['priority'] = priority; save_all()
-        else: st.success("✅ No active reports.")
+                            log_audit(f"Status changed to {new_status} for {alert.get('tracking_id')}")
+        else:
+            st.success("✅ No active reports.")
     
+    # --- TAB 2: FACTORIES (MANUAL MODE) ---
     with tab2:
-        st.subheader("🏭 Global Factory Compliance (Verified System)")
-        st.caption("🔬 Admin researches data -> AI calculates -> Admin Verifies -> MNCs see verified data.")
+        st.subheader("🏭 Factory Compliance (Manual Mode)")
+        st.caption("Add factories, set status/score/reason manually, and verify for MNCs.")
         
         # Stats
         total_f = len(st.session_state.factories)
         verified = len([f for f in st.session_state.factories if f.get('verified', False)])
-        green = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Green'])
-        yellow = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Yellow'])
-        red = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Red'])
+        green = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', 'Green') == 'Green'])
+        yellow = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', 'Green') == 'Yellow'])
+        red = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', 'Green') == 'Red'])
         
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📊 Total Factories", total_f)
+        col1.metric("📊 Total", total_f)
         col2.metric("✅ Verified", verified)
         col3.metric("🟢 Verified Green", green)
         col4.metric("🔴 Verified Red", red)
         
         st.divider()
         
-        # Add New Factory
+        # --- ADD NEW FACTORY ---
         with st.expander("➕ Add New Factory", expanded=False):
             col_a, col_b = st.columns(2)
             with col_a:
-                new_name = st.text_input("Factory Name")
-                new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()))
-                new_country = st.text_input("Country")
+                new_name = st.text_input("Factory Name", key="new_fact_name")
+                new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()), key="new_fact_client")
             with col_b:
-                if st.button("Add Factory & Start Compliance", use_container_width=True):
+                new_country = st.text_input("Country", "Pakistan", key="new_fact_country")
+                new_status = st.selectbox("Initial Status", ["Green", "Yellow", "Red"], key="new_fact_status")
+                if st.button("Add Factory", key="add_fact_btn", use_container_width=True):
                     if new_name:
                         new_factory = {
-                            "id": len(st.session_state.factories)+1,
+                            "id": len(st.session_state.factories) + 1,
                             "name": new_name,
                             "client": new_client,
                             "country": new_country,
-                            "status": "Green",
-                            "risk": "Low",
-                            "human_override": False,
-                            "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Factory Added"],
+                            "status": new_status,
+                            "risk": "Low" if new_status == "Green" else "Medium" if new_status == "Yellow" else "High",
+                            "manual_score": 0,
+                            "manual_status": new_status,
+                            "manual_reason": "New factory added",
                             "verified": False,
-                            "ai_score": 0,
-                            "ai_status": "Green",
-                            "ai_reason": "No data",
-                            "manual_score": None,
-                            "manual_status": None,
-                            "manual_reason": None,
-                            "env_score": 0,
-                            "labor_score": 0,
-                            "safety_score": 0,
-                            "mgmt_score": 0,
-                            "trans_score": 0
+                            "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Factory Added"]
                         }
                         st.session_state.factories.append(new_factory)
                         save_all()
                         log_audit(f"Factory Added: {new_name}")
-                        st.success(f"✅ Factory added! Now go to the list and enter compliance data.")
+                        st.success(f"✅ Factory added: {new_name}")
                         st.rerun()
+                    else:
+                        st.error("❌ Please enter a factory name.")
         
         st.divider()
         
-        # Factory List with Compliance Panel
+        # --- FACTORY LIST ---
         for idx, factory in enumerate(st.session_state.factories):
             with st.expander(f"🏭 {factory['name']} ({factory['country']}) - {factory['client']}"):
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    st.write(f"**Current Status:** {factory.get('status', 'Green')}")
-                    
-                    # Verified Status Badge
+                    # Status badge
                     if factory.get('verified', False):
                         st.markdown('<span class="verified-badge">✅ VERIFIED (Sent to MNCs)</span>', unsafe_allow_html=True)
-                        st.write(f"**Verified Score:** {factory.get('manual_score', factory.get('ai_score', 0))}")
-                        st.write(f"**Verified Status:** {factory.get('manual_status', factory.get('ai_status', 'Green'))}")
-                        st.write(f"**Verified Reason:** {factory.get('manual_reason', factory.get('ai_reason', 'N/A'))}")
                     else:
-                        st.markdown('<span style="color:#eab308;">⏳ Pending Verification (MNCs cannot see yet)</span>', unsafe_allow_html=True)
-                        
+                        st.markdown('<span style="color:#eab308;">⏳ Pending Verification</span>', unsafe_allow_html=True)
+                    
+                    st.write(f"**Current Status:** {factory.get('status', 'Green')}")
+                    
+                    # --- MANUAL EDIT FORM ---
+                    st.subheader("✏️ Manual Edit")
+                    col_edit1, col_edit2 = st.columns(2)
+                    with col_edit1:
+                        new_status = st.selectbox(
+                            "Status",
+                            ["Green", "Yellow", "Red"],
+                            index=["Green", "Yellow", "Red"].index(factory.get('manual_status', factory.get('status', 'Green'))),
+                            key=f"fact_status_{factory['id']}"
+                        )
+                        new_score = st.number_input(
+                            "Score (0-100)",
+                            min_value=0,
+                            max_value=100,
+                            value=factory.get('manual_score', 0),
+                            key=f"fact_score_{factory['id']}"
+                        )
+                    with col_edit2:
+                        new_reason = st.text_area(
+                            "Reason",
+                            value=factory.get('manual_reason', ''),
+                            key=f"fact_reason_{factory['id']}",
+                            height=80
+                        )
+                    
+                    # Save Manual Edit button
+                    if st.button(f"💾 Save Changes", key=f"save_fact_{factory['id']}"):
+                        factory['manual_status'] = new_status
+                        factory['manual_score'] = new_score
+                        factory['manual_reason'] = new_reason
+                        factory['status'] = new_status
+                        if 'history' not in factory:
+                            factory['history'] = []
+                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Manual update: {new_status}, Score: {new_score}")
+                        save_all()
+                        log_audit(f"Manual update for {factory['name']}: {new_status}")
+                        st.success("✅ Changes saved!")
+                        st.rerun()
+                    
+                    # History
+                    if factory.get('history'):
+                        with st.expander("📜 History"):
+                            for h in factory['history'][-5:]:
+                                st.caption(f"- {h}")
+                
                 with col2:
-                    # Delete Button
-                    if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}"):
-                        st.session_state.factories = [f for f in st.session_state.factories if f["id"] != factory["id"]]
-                        save_all()
-                        st.rerun()
-                
-                st.divider()
-                
-                # --- COMPLIANCE VERIFICATION PANEL ---
-                st.subheader("📊 Compliance Scoring (Global Formula)")
-                st.caption("Input the 5 pillars (0-100) based on your research (Open Supply Hub, Google, etc.). AI will calculate the total score.")
-                
-                # Sliders for 5 pillars
-                col_e, col_l, col_s, col_m, col_t = st.columns(5)
-                with col_e:
-                    env = st.number_input("🌍 Env", min_value=0, max_value=100, value=factory.get('env_score', 0), key=f"env_{factory['id']}")
-                with col_l:
-                    labor = st.number_input("👷 Labor", min_value=0, max_value=100, value=factory.get('labor_score', 0), key=f"labor_{factory['id']}")
-                with col_s:
-                    safety = st.number_input("🛡️ Safety", min_value=0, max_value=100, value=factory.get('safety_score', 0), key=f"safety_{factory['id']}")
-                with col_m:
-                    mgmt = st.number_input("📋 Mgmt", min_value=0, max_value=100, value=factory.get('mgmt_score', 0), key=f"mgmt_{factory['id']}")
-                with col_t:
-                    trans = st.number_input("🔍 Trans", min_value=0, max_value=100, value=factory.get('trans_score', 0), key=f"trans_{factory['id']}")
-                
-                # Calculate AI Score
-                if st.button(f"🤖 Compute AI Score", key=f"compute_{factory['id']}"):
-                    score, status, reason = calculate_compliance(env, labor, safety, mgmt, trans)
-                    smart_reason = generate_reason_smart(env, labor, safety, mgmt, trans)
-                    
-                    factory['ai_score'] = score
-                    factory['ai_status'] = status
-                    factory['ai_reason'] = f"{reason} | Details: {smart_reason}"
-                    factory['env_score'] = env
-                    factory['labor_score'] = labor
-                    factory['safety_score'] = safety
-                    factory['mgmt_score'] = mgmt
-                    factory['trans_score'] = trans
-                    
-                    # If not verified, update current status too
-                    if not factory.get('verified', False):
-                        factory['status'] = status
-                    
-                    save_all()
-                    st.success(f"✅ AI Score computed: {score} ({status})")
-                    st.rerun()
-                
-                # Display current AI Scores
-                st.markdown(f"""
-                <div class="ai-suggestion-box">
-                    <span class="ai-badge">🤖 AI SUGGESTION</span>
-                    <span style="color:#3b82f6;font-weight:600;margin-left:10px;">Score: {factory.get('ai_score', 0)} | Status: {factory.get('ai_status', 'Green')}</span>
-                    <div class="ai-reason-text">📌 {factory.get('ai_reason', 'No data')}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Manual Override Section
-                st.subheader("✏️ Manual Override (Boss Verification)")
-                col_ov1, col_ov2 = st.columns(2)
-                with col_ov1:
-                    manual_score = st.number_input("Override Score", min_value=0, max_value=100, value=factory.get('manual_score', factory.get('ai_score', 0)), key=f"m_score_{factory['id']}")
-                    manual_status = st.selectbox("Override Status", ["Green", "Yellow", "Red"], index=["Green", "Yellow", "Red"].index(factory.get('manual_status', factory.get('ai_status', 'Green'))), key=f"m_status_{factory['id']}")
-                with col_ov2:
-                    manual_reason = st.text_area("Override Reason (Detailed)", value=factory.get('manual_reason', factory.get('ai_reason', '')), key=f"m_reason_{factory['id']}", height=100)
-                
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.button(f"💾 Save Manual Override", key=f"save_manual_{factory['id']}"):
-                        factory['manual_score'] = manual_score
-                        factory['manual_status'] = manual_status
-                        factory['manual_reason'] = manual_reason
-                        factory['status'] = manual_status
-                        save_all()
-                        st.success("✅ Manual override saved!")
-                        st.rerun()
-                
-                with col_btn2:
+                    # --- VERIFY / PUBLISH ---
                     if not factory.get('verified', False):
                         if st.button(f"🔒 Verify & Publish to MNCs", key=f"verify_{factory['id']}", use_container_width=True):
-                            # Set verified flag
                             factory['verified'] = True
-                            # Lock the current manual/ai data as official
-                            if factory.get('manual_score') is not None:
-                                factory['status'] = factory['manual_status']
-                            else:
-                                factory['manual_score'] = factory['ai_score']
-                                factory['manual_status'] = factory['ai_status']
-                                factory['manual_reason'] = factory['ai_reason']
+                            if 'history' not in factory:
+                                factory['history'] = []
+                            factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Verified & Published")
                             save_all()
                             log_audit(f"Factory Verified: {factory['name']}")
-                            st.success(f"✅ {factory['name']} Verified & Published to MNCs!")
+                            st.success(f"✅ {factory['name']} Published to MNCs!")
                             st.rerun()
                     else:
-                        st.success("✅ Already Verified")
-                        if st.button(f"🔓 Unverify", key=f"unverify_{factory['id']}"):
+                        st.success("✅ Published to MNCs")
+                        if st.button(f"🔓 Unverify", key=f"unverify_{factory['id']}", use_container_width=True):
                             factory['verified'] = False
                             save_all()
+                            log_audit(f"Factory Unverified: {factory['name']}")
                             st.rerun()
-                
-                # History
-                if factory.get('history'):
-                    with st.expander("📜 History"):
-                        for h in factory['history'][-5:]:
-                            st.caption(f"- {h}")
-
+                    
+                    st.divider()
+                    
+                    # --- DELETE FACTORY ---
+                    if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}", use_container_width=True):
+                        st.session_state.factories = [f for f in st.session_state.factories if f["id"] != factory["id"]]
+                        save_all()
+                        log_audit(f"Factory Deleted: {factory['name']}")
+                        st.success(f"✅ Deleted {factory['name']}")
+                        st.rerun()
+    
+    # --- TAB 3: MNCs ---
     with tab3:
         for name, data in st.session_state.mnc_clients.items():
-            col1, col2, col3 = st.columns([2,2,1])
-            with col1: st.write(f"**{name}**")
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                st.write(f"**{name}**")
             with col2:
                 np = st.text_input(f"Pass", value=data["password"], key=f"mp_{name}")
-                if np != data["password"]: st.session_state.mnc_clients[name]["password"] = np; save_all(); log_audit(f"MNC Pass changed: {name}")
+                if np != data["password"]:
+                    st.session_state.mnc_clients[name]["password"] = np
+                    save_all()
+                    log_audit(f"MNC Pass changed: {name}")
             with col3:
                 active = st.checkbox("Active", value=data["active"], key=f"ma_{name}")
-                if active != data["active"]: st.session_state.mnc_clients[name]["active"] = active; save_all(); st.rerun()
-        new_mnc = st.text_input("New MNC Name"); new_pass = st.text_input("Set Password")
+                if active != data["active"]:
+                    st.session_state.mnc_clients[name]["active"] = active
+                    save_all()
+                    st.rerun()
+        new_mnc = st.text_input("New MNC Name")
+        new_pass = st.text_input("Set Password")
         if st.button("Add MNC"):
-            if new_mnc and new_pass: st.session_state.mnc_clients[new_mnc] = {"password": new_pass, "active": True}; save_all(); log_audit(f"MNC Added: {new_mnc}"); st.rerun()
-
+            if new_mnc and new_pass:
+                st.session_state.mnc_clients[new_mnc] = {"password": new_pass, "active": True}
+                save_all()
+                log_audit(f"MNC Added: {new_mnc}")
+                st.rerun()
+    
+    # --- TAB 4: AGENCIES ---
     with tab4:
         for name, data in st.session_state.agencies.items():
-            col1, col2, col3 = st.columns([2,2,1])
-            with col1: st.write(f"**{name}**")
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                st.write(f"**{name}**")
             with col2:
                 np = st.text_input(f"Pass", value=data["password"], key=f"ap_{name}")
-                if np != data["password"]: st.session_state.agencies[name]["password"] = np; save_all(); log_audit(f"Agency Pass changed: {name}")
+                if np != data["password"]:
+                    st.session_state.agencies[name]["password"] = np
+                    save_all()
+                    log_audit(f"Agency Pass changed: {name}")
             with col3:
                 active = st.checkbox("Active", value=data["active"], key=f"aa_{name}")
-                if active != data["active"]: st.session_state.agencies[name]["active"] = active; save_all(); st.rerun()
-        n_ag = st.text_input("New Country"); n_pass = st.text_input("Pass"); n_hl = st.text_input("Helpline")
+                if active != data["active"]:
+                    st.session_state.agencies[name]["active"] = active
+                    save_all()
+                    st.rerun()
+        n_ag = st.text_input("New Country")
+        n_pass = st.text_input("Pass")
+        n_hl = st.text_input("Helpline")
         if st.button("Add Agency"):
-            if n_ag and n_pass: st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}; save_all(); log_audit(f"Agency Added: {n_ag}"); st.rerun()
-
+            if n_ag and n_pass:
+                st.session_state.agencies[n_ag] = {"password": n_pass, "helpline": n_hl, "active": True}
+                save_all()
+                log_audit(f"Agency Added: {n_ag}")
+                st.rerun()
+    
+    # --- TAB 5: AUDIT LOGS ---
     with tab5:
+        st.subheader("📜 Complete Activity Trail")
         if st.session_state.audit_logs:
             df_audit = pd.DataFrame(st.session_state.audit_logs[::-1])
             st.dataframe(df_audit, use_container_width=True)
             if st.button("🗑️ Clear All Logs"):
-                st.session_state.audit_logs.clear(); save_audit([]); st.rerun()
-        else: st.info("No logs.")
-
-    with tab6:
-        st.subheader("📊 Compliance Analytics")
-        st.caption("Verified factories data summary.")
-        verified_factories = [f for f in st.session_state.factories if f.get('verified', False)]
-        if verified_factories:
-            df = pd.DataFrame(verified_factories)
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Status Distribution")
-                st.bar_chart(df['status'].value_counts())
-            with col2:
-                st.subheader("Score Distribution")
-                st.bar_chart(df['manual_score'] if 'manual_score' in df.columns else df['ai_score'])
+                st.session_state.audit_logs.clear()
+                save_audit([])
+                st.rerun()
         else:
-            st.info("No verified factories yet. Verify a factory to see analytics.")
+            st.info("No activities recorded yet.")
 
+# ==========================================
+# MNC DASHBOARD (VERIFIED ONLY)
+# ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Verified Compliance Dashboard")
-    st.caption("Only VERIFIED factories are shown here. Unverified factories are hidden.")
+    st.caption("✅ Only VERIFIED factories are shown here.")
     
-    # Filter ONLY verified factories
-    df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client and f.get("verified", False)])
+    df = pd.DataFrame([
+        f for f in st.session_state.factories
+        if f["client"] == client and f.get("verified", False)
+    ])
+    
     if not df.empty:
         total = len(df)
-        # Use manual_status if exists, else fallback to status
-        df['display_status'] = df.apply(lambda row: row.get('manual_status', row.get('status', 'Green')), axis=1)
-        green = len(df[df['display_status'] == 'Green'])
-        yellow = len(df[df['display_status'] == 'Yellow'])
-        red = len(df[df['display_status'] == 'Red'])
+        green = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Green'])
+        yellow = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Yellow'])
+        red = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Red'])
         
-        # Calculate average score
-        scores = df.apply(lambda row: row.get('manual_score', row.get('ai_score', 0)), axis=1)
-        avg_score = scores.mean() if not scores.empty else 0
-        score = (green/total)*100 if total > 0 else 0
+        scores = [f.get('manual_score', 0) for f in df]
+        avg_score = sum(scores) / len(scores) if scores else 0
         
         col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("🏭 Total Verified", total)
@@ -754,36 +732,48 @@ def mnc_dashboard(client):
         col4.metric("🔴 Red", red)
         col5.metric("📊 Avg Score", f"{avg_score:.1f}")
         
-        st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Overall Compliance Health Score</p><div class="health-score">{round(avg_score)}%</div></div>""", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;margin:10px 0;">
+            <p style="color:#94a3b8;">Overall Compliance Health Score</p>
+            <div class="health-score">{round(avg_score)}%</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Show detailed table
-        display_df = df[['id', 'name', 'country', 'display_status', 'manual_score', 'manual_reason']].rename(columns={'display_status': 'Status', 'manual_score': 'Score', 'manual_reason': 'Reason'})
-        st.dataframe(display_df)
+        display_df = df[['id', 'name', 'country', 'manual_status', 'manual_score', 'manual_reason']].rename(
+            columns={'manual_status': 'Status', 'manual_score': 'Score', 'manual_reason': 'Reason'}
+        )
+        st.dataframe(display_df, use_container_width=True)
     else:
-        st.info(f"No verified factories assigned to {client} yet. Factories are verified by the Admin before they appear here.")
+        st.info(f"No verified factories for {client} yet. Factories are verified by the Admin.")
 
+# ==========================================
+# AGENCY DASHBOARD
+# ==========================================
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Cyber Crime Dashboard")
     
     my_reports = [
-        a for a in st.session_state.cyber_alerts 
-        if a.get("country", "").strip() == agency.strip() 
-        and a.get('status') not in ['Resolved', 'Closed', 'Archived']
+        a for a in st.session_state.cyber_alerts
+        if a.get("assigned_to") == agency and a.get('status') not in ['Resolved', 'Closed', 'Archived']
     ]
     
     if not my_reports:
         st.success(f"✅ No pending cases for **{agency}**.")
         return
-
+    
     st.subheader(f"📋 Pending Cases ({len(my_reports)})")
     df = pd.DataFrame(my_reports)
     st.dataframe(df[['tracking_id', 'category', 'status', 'priority', 'time']], use_container_width=True)
     
     if not df.empty and 'category' in df.columns:
         col1, col2 = st.columns(2)
-        with col1: st.subheader("Category Breakdown"); st.bar_chart(df['category'].value_counts())
-        with col2: st.subheader("Status Distribution"); st.bar_chart(df['status'].value_counts())
-
+        with col1:
+            st.subheader("Category Breakdown")
+            st.bar_chart(df['category'].value_counts())
+        with col2:
+            st.subheader("Status Distribution")
+            st.bar_chart(df['status'].value_counts())
+    
     st.divider()
     st.subheader("📂 Case Files (Full Details)")
     
@@ -808,17 +798,15 @@ def agency_dashboard(agency):
                             st.image(fp, caption="Evidence Image", width=300)
                         else:
                             with open(fp, "rb") as f:
-                                st.download_button("📥 Download Evidence File", f, file_name=alert['evidence_file'])
-                else:
-                    st.caption("No evidence attached.")
+                                st.download_button("📥 Download Evidence", f, file_name=alert['evidence_file'])
                 
-                notes = st.text_area("📝 Internal Notes (Visible to Admin & Agency)", value=alert.get('notes', ''), key=f"ag_notes_{alert['id']}")
+                # Notes (Agency can see and add)
+                notes = st.text_area("📝 Internal Notes", value=alert.get('notes', ''), key=f"ag_notes_{alert['id']}")
                 if notes != alert.get('notes'):
                     alert['notes'] = notes
                     save_all()
-                    log_audit(f"Agency {agency} updated notes for {alert.get('tracking_id')}")
                     st.success("✅ Notes updated!")
-
+            
             with col_b:
                 st.markdown("**⚙️ Update Case**")
                 new_status = st.selectbox(
@@ -838,21 +826,26 @@ def agency_dashboard(agency):
                 st.caption(f"🕒 Reported: {alert.get('time')}")
 
 # ==========================================
-# 12. MAIN ROUTER
+# MAIN ROUTER
 # ==========================================
-if "landing_target" not in st.session_state: st.session_state.landing_target = None
+if "landing_target" not in st.session_state:
+    st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
     landing_page()
 else:
-    if st.session_state.role == "public": public_dashboard()
-    elif st.session_state.role == "admin": admin_dashboard()
-    elif st.session_state.role == "mnc": mnc_dashboard(st.session_state.client)
-    elif st.session_state.role == "agency": agency_dashboard(st.session_state.client)
+    if st.session_state.role == "public":
+        public_dashboard()
+    elif st.session_state.role == "admin":
+        admin_dashboard()
+    elif st.session_state.role == "mnc":
+        mnc_dashboard(st.session_state.client)
+    elif st.session_state.role == "agency":
+        agency_dashboard(st.session_state.client)
 
 st.markdown("""
 <div class="footer">
-    © 2026 E4GRID. Global Industrial Immune System.
+    © 2026 E4GRID. Built with ❤️ for Global Security.
     <br>
     <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a>
 </div>
