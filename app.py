@@ -5,10 +5,9 @@ import json
 import os
 import random
 import requests
-import urllib.parse
 
 # ==========================================
-# 🔒 SECURE
+# 🔒 SECURE: Passwords ab Secrets mein
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -21,16 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 🏛️ PAKISTAN COMPLIANCE RULES
-# ==========================================
-PAKISTAN_RULES = {
-    "min_wage": 32000,
-    "max_hours": 48,
-    "currency": "PKR"
-}
-
-# ==========================================
-# ✅ DATABASE HELPERS (FIXED - Permanent Data)
+# 2. DATABASE HELPERS (Permanent Save)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -45,47 +35,65 @@ def db_get(table, select="*", match=None):
 def db_post(table, data):
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     response = requests.post(url, headers=HEADERS, json=data)
-    if response.status_code == 201:
-        return True
-    return False
+    return response.status_code == 201
 
-def db_delete_all(table):
-    """FIXED: Force delete all rows from table"""
+def db_put(table, match, data):
     url = f"{SUPABASE_URL}/rest/v1/{table}"
-    response = requests.delete(url, headers=HEADERS)
-    return response.status_code in [200, 204]
+    params = []
+    for key, value in match.items():
+        params.append(f"{key}=eq.{value}")
+    url += "?" + "&".join(params)
+    response = requests.patch(url, headers=HEADERS, json=data)
+    return response.status_code == 200
 
-def save_data(table, data):
-    """FIXED: Clear and re-insert data"""
-    # 1. Delete all existing data
-    db_delete_all(table)
-    # 2. Insert new data
-    for item in data:
-        db_post(table, item)
-    return True
+def db_delete(table, match):
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    params = []
+    for key, value in match.items():
+        params.append(f"{key}=eq.{value}")
+    url += "?" + "&".join(params)
+    response = requests.delete(url, headers=HEADERS)
+    return response.status_code == 204
 
 # ==========================================
-# DATA LOAD FUNCTIONS (USING FIXED SAVE)
+# 3. DATA LOAD FUNCTIONS
 # ==========================================
 def load_factories():
     data = db_get("factories")
     if data:
+        # Ensure new fields exist for old data
         for item in data:
-            if "country" not in item or not item["country"]:
-                item["country"] = "Pakistan"
-            if "ai_suggestion" not in item:
-                item["ai_suggestion"] = "Green"
+            if "verified" not in item:
+                item["verified"] = False
+            if "manual_score" not in item:
+                item["manual_score"] = None
+            if "manual_status" not in item:
+                item["manual_status"] = None
+            if "manual_reason" not in item:
+                item["manual_reason"] = None
+            if "ai_score" not in item:
+                item["ai_score"] = 0
+            if "ai_status" not in item:
+                item["ai_status"] = "Green"
             if "ai_reason" not in item:
-                item["ai_reason"] = "✅ No violations detected."
-            if "human_override" not in item:
-                item["human_override"] = False
-            if "history" not in item:
-                item["history"] = []
+                item["ai_reason"] = "No data"
+            if "env_score" not in item:
+                item["env_score"] = 0
+            if "labor_score" not in item:
+                item["labor_score"] = 0
+            if "safety_score" not in item:
+                item["safety_score"] = 0
+            if "mgmt_score" not in item:
+                item["mgmt_score"] = 0
+            if "trans_score" not in item:
+                item["trans_score"] = 0
         return data
-    return [{"id": 1, "name": "Saga Sports", "status": "Green", "risk": "Low", "client": "Nike", "country": "Pakistan", "ai_suggestion": "Green", "ai_reason": "✅ No violations detected.", "human_override": False, "history": []}]
+    return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "human_override": False, "history": [], "verified": False, "ai_score": 0, "ai_status": "Green", "ai_reason": "No data", "manual_score": None, "manual_status": None, "manual_reason": None, "env_score": 0, "labor_score": 0, "safety_score": 0, "mgmt_score": 0, "trans_score": 0}]
 
 def save_factories(data):
-    save_data("factories", data)
+    db_delete("factories", {})
+    for item in data:
+        db_post("factories", item)
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -94,8 +102,9 @@ def load_mnc_clients():
     return {"Nike": {"password": "Nike@2026", "active": True}, "Adidas": {"password": "Adidas@2026", "active": True}}
 
 def save_mnc_clients(data):
-    transformed = [{"name": k, "password": v["password"], "active": v["active"]} for k, v in data.items()]
-    save_data("mnc_clients", transformed)
+    db_delete("mnc_clients", {})
+    for name, values in data.items():
+        db_post("mnc_clients", {"name": name, "password": values["password"], "active": values["active"]})
 
 def load_agencies():
     data = db_get("agencies")
@@ -104,27 +113,27 @@ def load_agencies():
     return {"Pakistan": {"password": "Pak@1799", "helpline": "1799", "active": True}, "USA": {"password": "FBI@911", "helpline": "911", "active": True}}
 
 def save_agencies(data):
-    transformed = [{"name": k, "password": v["password"], "helpline": v["helpline"], "active": v["active"]} for k, v in data.items()]
-    save_data("agencies", transformed)
+    db_delete("agencies", {})
+    for name, values in data.items():
+        db_post("agencies", {"name": name, "password": values["password"], "helpline": values["helpline"], "active": values["active"]})
 
 def load_alerts():
     data = db_get("cyber_alerts")
-    if data:
-        for item in data:
-            if "country" not in item or not item["country"]:
-                item["country"] = "Pakistan"
-        return data
-    return []
+    return data if data else []
 
 def save_alerts(data):
-    save_data("cyber_alerts", data)
+    db_delete("cyber_alerts", {})
+    for item in data:
+        db_post("cyber_alerts", item)
 
 def load_audit():
     data = db_get("audit_logs")
     return data if data else []
 
 def save_audit(data):
-    save_data("audit_logs", data)
+    db_delete("audit_logs", {})
+    for item in data:
+        db_post("audit_logs", item)
 
 def load_views():
     data = db_get("views_data")
@@ -133,11 +142,11 @@ def load_views():
     return {"total": 0, "today": 0, "last_date": None}
 
 def save_views(data):
-    db_delete_all("views_data")
+    db_delete("views_data", {})
     db_post("views_data", data)
 
 # ==========================================
-# SESSION STATE INIT
+# 4. SESSION STATE INIT
 # ==========================================
 if "factories" not in st.session_state:
     st.session_state.factories = load_factories()
@@ -175,88 +184,55 @@ def save_all():
     save_alerts(st.session_state.cyber_alerts)
 
 # ==========================================
-# 🧠 PAKISTAN AI ENGINE
+# 5. GLOBAL COMPLIANCE AI ENGINE (New)
 # ==========================================
-def ai_analyze_factory(factory_name, country="Pakistan", enable_news=False, evidence=None):
-    risk_score = 0
-    reasons = []
-    name_lower = factory_name.lower()
+def calculate_compliance(env, labor, safety, mgmt, trans):
+    """
+    Weighted Scoring Formula:
+    Env 30%, Labor 25%, Safety 20%, Mgmt 15%, Trans 10%
+    """
+    score = (env * 0.30) + (labor * 0.25) + (safety * 0.20) + (mgmt * 0.15) + (trans * 0.10)
+    score = round(score, 1)
     
-    # --- 1. EVIDENCE CHECK (Payroll/Attendance) ---
-    if evidence:
-        wage = evidence.get('wage', 0)
-        hours = evidence.get('hours', 0)
-        
-        if wage > 0 and wage < 32000:
-            risk_score += 3
-            reasons.append(f"🔴 EVIDENCE: Wage PKR {wage:,} < minimum (PKR 32,000).")
-        elif wage > 0:
-            reasons.append(f"✅ EVIDENCE: Wage PKR {wage:,} OK.")
-        
-        if hours > 0 and hours > 48:
-            risk_score += 3
-            reasons.append(f"🔴 EVIDENCE: Hours {hours}/week exceed 48.")
-        elif hours > 0:
-            reasons.append(f"✅ EVIDENCE: Hours {hours}/week OK.")
-    
-    # --- 2. LOCAL RULES ---
-    if "tannery" in name_lower or "leather" in name_lower:
-        risk_score += 2
-        reasons.append("🔴 Industry: Tannery/Leather (High Risk).")
-    if "waste" in name_lower or "dump" in name_lower:
-        risk_score += 2
-        reasons.append("🔴 Industry: Waste dumping.")
-    if "dye" in name_lower or "chemical" in name_lower:
-        risk_score += 1
-        reasons.append("🟡 Industry: Chemical usage.")
-    if "sport" in name_lower or "textile" in name_lower or "garment" in name_lower:
-        reasons.append("✅ Industry: Sports/Textile (Safe).")
-
-    # --- 3. NEWS SCANNER (Optional) ---
-    if enable_news:
-        try:
-            query = f"{factory_name} Pakistan violation pollution child labor fine"
-            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-US&gl=US&ceid=US:en"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                content = response.text.lower()
-                if factory_name.lower() in content:
-                    neg_words = ['violation', 'pollution', 'fine', 'child labor', 'illegal']
-                    for word in neg_words:
-                        if word in content:
-                            risk_score += 1
-                            reasons.append(f"🟡 News mentions '{word}'.")
-                            break
-        except:
-            pass
-
-    # --- 4. FINAL DECISION ---
-    if risk_score >= 3:
-        final_status = "Red"
-    elif risk_score >= 0.5:
-        final_status = "Yellow"
+    if score >= 80:
+        status = "Green"
+        reason = "✅ Excellent compliance. All standards met."
+    elif score >= 50:
+        status = "Yellow"
+        reason = "🟡 Moderate compliance. Some improvements needed."
     else:
-        final_status = "Green"
+        status = "Red"
+        reason = "🔴 High risk. Immediate action required."
+    
+    return score, status, reason
 
-    if not reasons:
-        final_status = "Green"
-        reasons = ["✅ No violations detected."]
+def generate_reason_smart(env, labor, safety, mgmt, trans):
+    reasons = []
+    if env < 50: reasons.append("Environment: Poor (Needs EPA/ISO check)")
+    elif env < 80: reasons.append("Environment: Average")
+    else: reasons.append("Environment: Excellent")
+    
+    if labor < 50: reasons.append("Labor: High risk (Wages/Child labor)")
+    elif labor < 80: reasons.append("Labor: Needs review")
+    else: reasons.append("Labor: Compliant")
+    
+    if safety < 50: reasons.append("Safety: Critical issues")
+    elif safety < 80: reasons.append("Safety: Minor issues")
+    else: reasons.append("Safety: Safe")
+    
+    if mgmt < 50: reasons.append("Mgmt: Poor documentation")
+    elif mgmt < 80: reasons.append("Mgmt: Needs update")
+    else: reasons.append("Mgmt: Strong")
+    
+    if trans < 50: reasons.append("Transparency: Hidden")
+    elif trans < 80: reasons.append("Transparency: Partial")
+    else: reasons.append("Transparency: Open")
+    
+    return " | ".join(reasons)
 
-    final_reason = f"[Score: {round(risk_score, 1)}] " + " | ".join(reasons)
-    return final_status, final_reason
-
-def check_pakistan_compliance(payroll_df, attendance_df):
-    alerts = []
-    if not payroll_df.empty and "wage" in payroll_df.columns:
-        below = payroll_df[payroll_df["wage"] < 32000]
-        if not below.empty:
-            alerts.append(f"⚠️ {len(below)} workers below min wage (PKR 32,000).")
-    if not attendance_df.empty and "hours" in attendance_df.columns:
-        over = attendance_df[attendance_df["hours"] > 48]
-        if not over.empty:
-            alerts.append(f"⚠️ {len(over)} workers exceed 48 hours/week.")
-    return alerts
-
+# ==========================================
+# 6. HELPER FUNCTIONS
+# ==========================================
 def generate_timeline(current_status):
     steps = ["New", "Under Review", "Resolved", "Closed"]
     status_map = {"New": 0, "Under Review": 1, "Resolved": 2, "Closed": 3}
@@ -295,7 +271,10 @@ def save_uploaded_file(uploaded_file):
         return safe_name
     return None
 
-st.set_page_config(page_title="E4GRID - Pakistan Compliance", layout="wide", initial_sidebar_state="expanded")
+# ==========================================
+# 7. PAGE CONFIG & CSS
+# ==========================================
+st.set_page_config(page_title="E4GRID - Global Shield", layout="wide", initial_sidebar_state="expanded")
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -306,6 +285,7 @@ st.markdown("""
         .stButton > button:hover { transform: scale(1.02); box-shadow: 0 0 30px rgba(251, 191, 36, 0.3); }
         .footer { text-align: center; padding: 30px 0 10px 0; color: #475569; font-size: 0.9rem; border-top: 1px solid #1e293b; margin-top: 40px; }
         .footer a { color: #fbbf24; text-decoration: none; }
+        .tagline-gold { color: #fbbf24; font-weight: 600; letter-spacing: 2px; }
         .timeline-container { display: flex; align-items: center; gap: 5px; margin: 10px 0; flex-wrap: wrap; }
         .timeline-step { display: flex; align-items: center; gap: 5px; }
         .timeline-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -318,6 +298,7 @@ st.markdown("""
         .notif-badge { position: absolute; top: -5px; right: -10px; background: #ef4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: 700; }
         .ai-badge { background: #3b82f6; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .boss-badge { background: #fbbf24; color: black; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+        .verified-badge { background: #22c55e; color: white; padding: 2px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
         .ai-suggestion-box { background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 10px; border-radius: 8px; margin: 5px 0; }
         .ai-reason-text { color: #94a3b8; font-size: 0.8rem; margin-top: 4px; }
         .score-badge { font-weight: 600; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; }
@@ -326,17 +307,18 @@ st.markdown("""
 
 DEMO_FORM_LINK = "https://docs.google.com/forms/d/e/1FAIpQLSf6dliM5l1-dg34Uj_4MWwbJOLDiI7DuUnDxG9M-gBdvYxNyA/viewform?usp=header"
 
+# ==========================================
+# 8. SIDEBAR
+# ==========================================
 with st.sidebar:
     if os.path.exists("logo.png"): st.image("logo.png", width=150)
     else: st.markdown("<h2 style='color:#fbbf24;'>⚡ E4GRID</h2>", unsafe_allow_html=True)
-    st.caption("🇵🇰 Pakistan Compliance")
-    
+    st.caption("Cyber · Compliance · Global")
     st.divider()
     st.markdown("### 🚀 Interested in E4GRID?")
     st.link_button("📌 Book a Demo", DEMO_FORM_LINK, use_container_width=True)
     st.caption("For Agencies, MNCs, and Enterprises.")
     st.divider()
-    
     if st.session_state.get("logged_in", False):
         st.write(f"**User:** `{st.session_state.role}`")
         if st.button("🚪 Logout"):
@@ -346,6 +328,9 @@ with st.sidebar:
             st.session_state.landing_target = None
             st.rerun()
 
+# ==========================================
+# 9. LANDING PAGE
+# ==========================================
 def landing_page():
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -355,13 +340,13 @@ def landing_page():
         st.markdown(f"""
             <div style="padding-top: 15px;">
                 <div style="font-size: 2.8rem; font-weight: 800; color: #fbbf24;">E4GRID</div>
-                <div style="color: #94a3b8; font-size: 1rem; letter-spacing: 2px;">🇵🇰 Pakistan's Industrial Compliance Grid</div>
-                <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">See Risk · Build Trust · Stay Compliant</div>
+                <div class="tagline-gold" style="font-size: 1.1rem; letter-spacing: 2px;">See Risk · Build Trust · Stay Compliant</div>
+                <div style="color: #64748b; font-size: 0.8rem; letter-spacing: 3px;">BUILDING A SAFER DIGITAL WORLD</div>
             </div>
         """, unsafe_allow_html=True)
     
     st.divider()
-    st.markdown("### 🇵🇰 Pakistan Compliance Grid")
+    st.markdown("### 🌐 A Unified Grid for Global Security")
     col1, col2, col3 = st.columns(3)
     with col1: st.markdown("""<div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #fbbf24;"><h4 style="color:#fbbf24;">🛡️ Public</h4><p style="color:#94a3b8; font-size:0.9rem;">Report cybercrime, upload evidence, and track status.</p></div>""", unsafe_allow_html=True)
     with col2: st.markdown("""<div style="background:#1e293b; padding:20px; border-radius:12px; border-top:4px solid #3b82f6;"><h4 style="color:#3b82f6;">🏢 Enterprise</h4><p style="color:#94a3b8; font-size:0.9rem;">Monitor compliance, risk scores, and supply chain health.</p></div>""", unsafe_allow_html=True)
@@ -393,6 +378,9 @@ def landing_page():
                 else:
                     st.error("Invalid credentials")
 
+# ==========================================
+# 10. PUBLIC DASHBOARD (Unchanged)
+# ==========================================
 def public_dashboard():
     st.header("🌍 Report Incident")
     with st.form("report_form", clear_on_submit=True):
@@ -417,8 +405,7 @@ def public_dashboard():
                 new_alert = {
                     "id": len(st.session_state.cyber_alerts)+1,
                     "tracking_id": tracking_id, "name": name or "Anonymous",
-                    "email": email, "country": country,
-                    "city": city,
+                    "email": email, "country": country, "city": city,
                     "category": category, "text": complaint, "website": website,
                     "evidence_file": file_name, "status": "New", "priority": "Medium",
                     "assigned_to": "Unassigned", "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -440,14 +427,18 @@ def public_dashboard():
             st.success(f"Status: {found[0]['status']} | Assigned to: {found[0].get('assigned_to', 'Pending')}")
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
+# ==========================================
+# 11. ADMIN DASHBOARD (UPGRADED: Verified System)
+# ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
     total = len(st.session_state.cyber_alerts)
     pending = len([a for a in st.session_state.cyber_alerts if a['status'] not in ['Resolved', 'Closed', 'Archived']])
     resolved = len([a for a in st.session_state.cyber_alerts if a['status'] == 'Resolved'])
     views = st.session_state.views_data
+    
     col1, col2, col3, col4, col5, col6 = st.columns([2,1,1,1,1,1])
-    col1.metric("📊 Reports", total)
+    col1.metric("📊 Cyber Reports", total)
     col2.metric("⏳ Pending", pending)
     col3.metric("✅ Resolved", resolved)
     col4.metric("👁️ Views", views["total"])
@@ -459,10 +450,10 @@ def admin_dashboard():
         df = pd.DataFrame(st.session_state.cyber_alerts)
         if not df.empty and 'category' in df.columns:
             col_ch1, col_ch2 = st.columns(2)
-            with col_ch1: st.subheader("Category"); st.bar_chart(df['category'].value_counts())
-            with col_ch2: st.subheader("Status"); st.bar_chart(df['status'].value_counts())
+            with col_ch1: st.subheader("Category Breakdown"); st.bar_chart(df['category'].value_counts())
+            with col_ch2: st.subheader("Status Distribution"); st.bar_chart(df['status'].value_counts())
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📋 Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "🤖 AI Control", "🇵🇰 Rules"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 Cyber Reports", "🏭 Factories (Verified)", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs", "📊 Compliance"])
     
     with tab1:
         search = st.text_input("🔍 Search")
@@ -504,154 +495,186 @@ def admin_dashboard():
         else: st.success("✅ No active reports.")
     
     with tab2:
-        st.subheader("🏭 Factory Compliance (Pakistan Only)")
+        st.subheader("🏭 Global Factory Compliance (Verified System)")
+        st.caption("🔬 Admin researches data -> AI calculates -> Admin Verifies -> MNCs see verified data.")
+        
+        # Stats
         total_f = len(st.session_state.factories)
-        green = len([f for f in st.session_state.factories if f['status'] == 'Green'])
-        yellow = len([f for f in st.session_state.factories if f['status'] == 'Yellow'])
-        red = len([f for f in st.session_state.factories if f['status'] == 'Red'])
-        st.metric("📊 Health", f"{green} 🟢, {yellow} 🟡, {red} 🔴 out of {total_f}")
+        verified = len([f for f in st.session_state.factories if f.get('verified', False)])
+        green = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Green'])
+        yellow = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Yellow'])
+        red = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', f.get('status')) == 'Red'])
         
-        st.divider()
-        st.subheader("🤖 AI Settings")
-        if "enable_news" not in st.session_state:
-            st.session_state.enable_news = False
-        st.toggle("Enable News Scanner (Pakistan Only)", value=st.session_state.enable_news, key="news_toggle")
-        st.session_state.enable_news = st.session_state.news_toggle
-        st.caption("✅ Current Mode: " + ("🟢 News ON" if st.session_state.enable_news else "🔴 News OFF"))
-        
-        with st.expander("📤 Upload Evidence (Payroll/Attendance)"):
-            st.caption("CSV columns: `worker_id, wage, hours, name`")
-            uploaded_file = st.file_uploader("Upload CSV", type=['csv'], key="evidence_csv")
-            if uploaded_file is not None:
-                try:
-                    df = pd.read_csv(uploaded_file)
-                    st.dataframe(df.head(10))
-                    factory_names = [f['name'] for f in st.session_state.factories]
-                    selected_factory = st.selectbox("Select Factory", factory_names, key="evidence_factory_select")
-                    
-                    if st.button("🔍 Attach Evidence & Re-Scan", key="attach_evidence_btn"):
-                        avg_wage = df['wage'].mean() if 'wage' in df.columns else 0
-                        avg_hours = df['hours'].mean() if 'hours' in df.columns else 0
-                        evidence = {"wage": avg_wage, "hours": avg_hours}
-                        
-                        for factory in st.session_state.factories:
-                            if factory['name'] == selected_factory:
-                                suggestion, reason = ai_analyze_factory(
-                                    factory['name'], 
-                                    factory.get('country', 'Pakistan'), 
-                                    st.session_state.enable_news,
-                                    evidence=evidence
-                                )
-                                factory['ai_suggestion'] = suggestion
-                                factory['ai_reason'] = reason
-                                if not factory.get('human_override', False):
-                                    factory['status'] = suggestion
-                                if 'history' not in factory:
-                                    factory['history'] = []
-                                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Evidence Attached")
-                                save_all()
-                                st.success(f"✅ Evidence attached to {selected_factory}!")
-                                st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error: {e}")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("📊 Total Factories", total_f)
+        col2.metric("✅ Verified", verified)
+        col3.metric("🟢 Verified Green", green)
+        col4.metric("🔴 Verified Red", red)
         
         st.divider()
         
-        col_del1, col_del2 = st.columns([1,3])
-        with col_del1:
-            del_id = st.number_input("Delete ID", min_value=1, step=1, key="del_fact_id_global")
-            if st.button("🗑️ Delete", key="del_fact_btn_global"):
-                found = any(f["id"] == del_id for f in st.session_state.factories)
-                if found:
-                    st.session_state.factories = [f for f in st.session_state.factories if f["id"] != del_id]
-                    save_all()
-                    log_audit(f"Factory Deleted: ID {del_id}")
-                    st.success(f"✅ Deleted ID {del_id}!")
-                    st.rerun()
-                else:
-                    st.error(f"❌ ID {del_id} not found.")
-        with col_del2: st.caption("Tip: Check ID from list below.")
+        # Add New Factory
+        with st.expander("➕ Add New Factory", expanded=False):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                new_name = st.text_input("Factory Name")
+                new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()))
+                new_country = st.text_input("Country")
+            with col_b:
+                if st.button("Add Factory & Start Compliance", use_container_width=True):
+                    if new_name:
+                        new_factory = {
+                            "id": len(st.session_state.factories)+1,
+                            "name": new_name,
+                            "client": new_client,
+                            "country": new_country,
+                            "status": "Green",
+                            "risk": "Low",
+                            "human_override": False,
+                            "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Factory Added"],
+                            "verified": False,
+                            "ai_score": 0,
+                            "ai_status": "Green",
+                            "ai_reason": "No data",
+                            "manual_score": None,
+                            "manual_status": None,
+                            "manual_reason": None,
+                            "env_score": 0,
+                            "labor_score": 0,
+                            "safety_score": 0,
+                            "mgmt_score": 0,
+                            "trans_score": 0
+                        }
+                        st.session_state.factories.append(new_factory)
+                        save_all()
+                        log_audit(f"Factory Added: {new_name}")
+                        st.success(f"✅ Factory added! Now go to the list and enter compliance data.")
+                        st.rerun()
+        
         st.divider()
         
+        # Factory List with Compliance Panel
         for idx, factory in enumerate(st.session_state.factories):
-            country = factory.get("country", "Pakistan")
-            with st.expander(f"🏭 {factory['name']} ({country}) - Status: {factory['status']}"):
-                col1, col2, col3 = st.columns([2,1,1])
+            with st.expander(f"🏭 {factory['name']} ({factory['country']}) - {factory['client']}"):
+                col1, col2 = st.columns([2, 1])
+                
                 with col1:
-                    st.write(f"**Client:** {factory['client']}")
-                    st.write(f"**Country:** {country}")
-                    st.write(f"**Current Status:** {factory['status']}")
-                    ai_suggestion = factory.get('ai_suggestion','Green')
-                    ai_reason = factory.get('ai_reason','No reason.')
-                    score_display = ai_reason.split(']')[0].replace('[Score: ', '') if '[Score:' in ai_reason else '0'
-                    st.markdown(f"""<div class="ai-suggestion-box">
-                        <span class="ai-badge">🤖 AI SUGGESTION</span>
-                        <span style="color:#3b82f6;font-weight:600;margin-left:10px;">{ai_suggestion}</span>
-                        <span class="score-badge" style="background:#1e293b;color:#94a3b8;margin-left:10px;">Score: {score_display}</span>
-                        <div class="ai-reason-text">📌 {ai_reason.replace('[Score: '+score_display+'] ', '') if '[Score:' in ai_reason else ai_reason}</div>
-                    </div>""", unsafe_allow_html=True)
-                    if factory.get('human_override', False):
-                        st.markdown(f"""<div style="background:rgba(251,191,36,0.1);border-left:4px solid #fbbf24;padding:10px;border-radius:8px;margin:5px 0;">
-                            <span class="boss-badge">👑 BOSS VERIFIED</span>
-                            <span style="color:#fbbf24;margin-left:10px;">You manually approved this.</span>
-                        </div>""", unsafe_allow_html=True)
+                    st.write(f"**Current Status:** {factory.get('status', 'Green')}")
                     
+                    # Verified Status Badge
+                    if factory.get('verified', False):
+                        st.markdown('<span class="verified-badge">✅ VERIFIED (Sent to MNCs)</span>', unsafe_allow_html=True)
+                        st.write(f"**Verified Score:** {factory.get('manual_score', factory.get('ai_score', 0))}")
+                        st.write(f"**Verified Status:** {factory.get('manual_status', factory.get('ai_status', 'Green'))}")
+                        st.write(f"**Verified Reason:** {factory.get('manual_reason', factory.get('ai_reason', 'N/A'))}")
+                    else:
+                        st.markdown('<span style="color:#eab308;">⏳ Pending Verification (MNCs cannot see yet)</span>', unsafe_allow_html=True)
+                        
                 with col2:
-                    current_status_index = ["Green","Yellow","Red"].index(factory['status'])
-                    new_status = st.selectbox("Override", ["Green","Yellow","Red"], index=current_status_index, key=f"fact_status_override_{factory['id']}_{idx}")
-                    if new_status != factory['status']:
-                        factory['status'] = new_status
-                        factory['human_override'] = True
-                        if 'history' not in factory: factory['history'] = []
-                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Boss Override")
+                    # Delete Button
+                    if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}"):
+                        st.session_state.factories = [f for f in st.session_state.factories if f["id"] != factory["id"]]
                         save_all()
-                        log_audit(f"Boss changed {factory['name']} to {new_status}")
                         st.rerun()
-                with col3:
-                    if st.button(f"🔄 AI Scan", key=f"ai_scan_btn_{factory['id']}_{idx}"):
-                        suggestion, reason = ai_analyze_factory(factory['name'], country, st.session_state.enable_news)
-                        factory['ai_suggestion'] = suggestion
-                        factory['ai_reason'] = reason
-                        if not factory.get('human_override', False):
-                            factory['status'] = suggestion
-                        if 'history' not in factory: factory['history'] = []
-                        factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - AI Scan")
+                
+                st.divider()
+                
+                # --- COMPLIANCE VERIFICATION PANEL ---
+                st.subheader("📊 Compliance Scoring (Global Formula)")
+                st.caption("Input the 5 pillars (0-100) based on your research (Open Supply Hub, Google, etc.). AI will calculate the total score.")
+                
+                # Sliders for 5 pillars
+                col_e, col_l, col_s, col_m, col_t = st.columns(5)
+                with col_e:
+                    env = st.number_input("🌍 Env", min_value=0, max_value=100, value=factory.get('env_score', 0), key=f"env_{factory['id']}")
+                with col_l:
+                    labor = st.number_input("👷 Labor", min_value=0, max_value=100, value=factory.get('labor_score', 0), key=f"labor_{factory['id']}")
+                with col_s:
+                    safety = st.number_input("🛡️ Safety", min_value=0, max_value=100, value=factory.get('safety_score', 0), key=f"safety_{factory['id']}")
+                with col_m:
+                    mgmt = st.number_input("📋 Mgmt", min_value=0, max_value=100, value=factory.get('mgmt_score', 0), key=f"mgmt_{factory['id']}")
+                with col_t:
+                    trans = st.number_input("🔍 Trans", min_value=0, max_value=100, value=factory.get('trans_score', 0), key=f"trans_{factory['id']}")
+                
+                # Calculate AI Score
+                if st.button(f"🤖 Compute AI Score", key=f"compute_{factory['id']}"):
+                    score, status, reason = calculate_compliance(env, labor, safety, mgmt, trans)
+                    smart_reason = generate_reason_smart(env, labor, safety, mgmt, trans)
+                    
+                    factory['ai_score'] = score
+                    factory['ai_status'] = status
+                    factory['ai_reason'] = f"{reason} | Details: {smart_reason}"
+                    factory['env_score'] = env
+                    factory['labor_score'] = labor
+                    factory['safety_score'] = safety
+                    factory['mgmt_score'] = mgmt
+                    factory['trans_score'] = trans
+                    
+                    # If not verified, update current status too
+                    if not factory.get('verified', False):
+                        factory['status'] = status
+                    
+                    save_all()
+                    st.success(f"✅ AI Score computed: {score} ({status})")
+                    st.rerun()
+                
+                # Display current AI Scores
+                st.markdown(f"""
+                <div class="ai-suggestion-box">
+                    <span class="ai-badge">🤖 AI SUGGESTION</span>
+                    <span style="color:#3b82f6;font-weight:600;margin-left:10px;">Score: {factory.get('ai_score', 0)} | Status: {factory.get('ai_status', 'Green')}</span>
+                    <div class="ai-reason-text">📌 {factory.get('ai_reason', 'No data')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Manual Override Section
+                st.subheader("✏️ Manual Override (Boss Verification)")
+                col_ov1, col_ov2 = st.columns(2)
+                with col_ov1:
+                    manual_score = st.number_input("Override Score", min_value=0, max_value=100, value=factory.get('manual_score', factory.get('ai_score', 0)), key=f"m_score_{factory['id']}")
+                    manual_status = st.selectbox("Override Status", ["Green", "Yellow", "Red"], index=["Green", "Yellow", "Red"].index(factory.get('manual_status', factory.get('ai_status', 'Green'))), key=f"m_status_{factory['id']}")
+                with col_ov2:
+                    manual_reason = st.text_area("Override Reason (Detailed)", value=factory.get('manual_reason', factory.get('ai_reason', '')), key=f"m_reason_{factory['id']}", height=100)
+                
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button(f"💾 Save Manual Override", key=f"save_manual_{factory['id']}"):
+                        factory['manual_score'] = manual_score
+                        factory['manual_status'] = manual_status
+                        factory['manual_reason'] = manual_reason
+                        factory['status'] = manual_status
                         save_all()
-                        log_audit(f"AI Scanned {factory['name']}")
+                        st.success("✅ Manual override saved!")
                         st.rerun()
+                
+                with col_btn2:
+                    if not factory.get('verified', False):
+                        if st.button(f"🔒 Verify & Publish to MNCs", key=f"verify_{factory['id']}", use_container_width=True):
+                            # Set verified flag
+                            factory['verified'] = True
+                            # Lock the current manual/ai data as official
+                            if factory.get('manual_score') is not None:
+                                factory['status'] = factory['manual_status']
+                            else:
+                                factory['manual_score'] = factory['ai_score']
+                                factory['manual_status'] = factory['ai_status']
+                                factory['manual_reason'] = factory['ai_reason']
+                            save_all()
+                            log_audit(f"Factory Verified: {factory['name']}")
+                            st.success(f"✅ {factory['name']} Verified & Published to MNCs!")
+                            st.rerun()
+                    else:
+                        st.success("✅ Already Verified")
+                        if st.button(f"🔓 Unverify", key=f"unverify_{factory['id']}"):
+                            factory['verified'] = False
+                            save_all()
+                            st.rerun()
+                
+                # History
                 if factory.get('history'):
                     with st.expander("📜 History"):
-                        for h in factory['history'][-5:]: st.caption(f"- {h}")
-        
-        st.divider()
-        st.subheader("➕ Add New Factory (Pakistan Only)")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            new_name = st.text_input("Factory Name", key="new_fact_name_global")
-            new_client = st.selectbox("Assign to MNC", list(st.session_state.mnc_clients.keys()), key="new_fact_client_global")
-            new_country = st.text_input("Country", "Pakistan", key="new_fact_country_global")
-        with col_b:
-            new_status = st.selectbox("Initial Status", ["Green","Yellow","Red"], key="new_fact_status_global")
-            if st.button("Add with AI", key="add_fact_global_btn"):
-                if new_name:
-                    suggestion, reason = ai_analyze_factory(new_name, new_country, st.session_state.enable_news)
-                    new_factory = {
-                        "id": len(st.session_state.factories)+1,
-                        "name": new_name,
-                        "status": new_status,
-                        "risk": "Low" if new_status=="Green" else "Medium",
-                        "client": new_client,
-                        "country": new_country,
-                        "ai_suggestion": suggestion,
-                        "ai_reason": reason,
-                        "human_override": False,
-                        "history": [f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Added"]
-                    }
-                    st.session_state.factories.append(new_factory)
-                    save_all()
-                    log_audit(f"Factory Added: {new_name}")
-                    st.success(f"✅ Added! AI Suggests: {suggestion}")
-                    st.rerun()
+                        for h in factory['history'][-5:]:
+                            st.caption(f"- {h}")
 
     with tab3:
         for name, data in st.session_state.mnc_clients.items():
@@ -690,38 +713,54 @@ def admin_dashboard():
         else: st.info("No logs.")
 
     with tab6:
-        if st.button("🔄 Run AI Scan on ALL Factories", use_container_width=True):
-            for factory in st.session_state.factories:
-                country = factory.get("country", "Pakistan")
-                suggestion, reason = ai_analyze_factory(factory['name'], country, st.session_state.enable_news)
-                factory['ai_suggestion'] = suggestion; factory['ai_reason'] = reason
-                if not factory.get('human_override', False): factory['status'] = suggestion
-                if 'history' not in factory: factory['history'] = []
-                factory['history'].append(f"{datetime.now().strftime('%Y-%m-%d %H:%M')} - Bulk AI Scan")
-            save_all(); log_audit("Bulk AI Scan Executed"); st.success("✅ All factories scanned!"); st.rerun()
-        st.info("🇵🇰 AI uses Pakistan Rules: Min Wage 32,000 PKR | Max Hours 48/week")
-
-    with tab7:
-        st.subheader("🇵🇰 Pakistan Compliance Rules")
-        st.markdown(f"""
-        | Rule | Value |
-        |------|-------|
-        | **Minimum Wage** | PKR {PAKISTAN_RULES['min_wage']:,} / month |
-        | **Max Working Hours** | {PAKISTAN_RULES['max_hours']} hours / week |
-        """)
-        st.caption("These rules are applied when checking payroll/attendance data.")
+        st.subheader("📊 Compliance Analytics")
+        st.caption("Verified factories data summary.")
+        verified_factories = [f for f in st.session_state.factories if f.get('verified', False)]
+        if verified_factories:
+            df = pd.DataFrame(verified_factories)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Status Distribution")
+                st.bar_chart(df['status'].value_counts())
+            with col2:
+                st.subheader("Score Distribution")
+                st.bar_chart(df['manual_score'] if 'manual_score' in df.columns else df['ai_score'])
+        else:
+            st.info("No verified factories yet. Verify a factory to see analytics.")
 
 def mnc_dashboard(client):
-    st.header(f"🏢 {client} - Compliance")
-    df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client])
+    st.header(f"🏢 {client} - Verified Compliance Dashboard")
+    st.caption("Only VERIFIED factories are shown here. Unverified factories are hidden.")
+    
+    # Filter ONLY verified factories
+    df = pd.DataFrame([f for f in st.session_state.factories if f["client"] == client and f.get("verified", False)])
     if not df.empty:
-        total = len(df); green = len(df[df['status']=='Green']); yellow = len(df[df['status']=='Yellow']); red = len(df[df['status']=='Red'])
-        score = (green/total)*100
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("🏭 Total", total); col2.metric("🟢 Green", green); col3.metric("🟡 Yellow", yellow); col4.metric("🔴 Red", red)
-        st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Health Score</p><div class="health-score">{round(score)}%</div></div>""", unsafe_allow_html=True)
-        st.dataframe(df[['id', 'name', 'country', 'status', 'risk']])
-    else: st.info("No factories assigned.")
+        total = len(df)
+        # Use manual_status if exists, else fallback to status
+        df['display_status'] = df.apply(lambda row: row.get('manual_status', row.get('status', 'Green')), axis=1)
+        green = len(df[df['display_status'] == 'Green'])
+        yellow = len(df[df['display_status'] == 'Yellow'])
+        red = len(df[df['display_status'] == 'Red'])
+        
+        # Calculate average score
+        scores = df.apply(lambda row: row.get('manual_score', row.get('ai_score', 0)), axis=1)
+        avg_score = scores.mean() if not scores.empty else 0
+        score = (green/total)*100 if total > 0 else 0
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("🏭 Total Verified", total)
+        col2.metric("🟢 Green", green)
+        col3.metric("🟡 Yellow", yellow)
+        col4.metric("🔴 Red", red)
+        col5.metric("📊 Avg Score", f"{avg_score:.1f}")
+        
+        st.markdown(f"""<div style="text-align:center;padding:20px;background:#1e293b;border-radius:12px;"><p style="color:#94a3b8;">Overall Compliance Health Score</p><div class="health-score">{round(avg_score)}%</div></div>""", unsafe_allow_html=True)
+        
+        # Show detailed table
+        display_df = df[['id', 'name', 'country', 'display_status', 'manual_score', 'manual_reason']].rename(columns={'display_status': 'Status', 'manual_score': 'Score', 'manual_reason': 'Reason'})
+        st.dataframe(display_df)
+    else:
+        st.info(f"No verified factories assigned to {client} yet. Factories are verified by the Admin before they appear here.")
 
 def agency_dashboard(agency):
     st.header(f"🛡️ {agency} - Cyber Crime Dashboard")
@@ -798,6 +837,9 @@ def agency_dashboard(agency):
                 
                 st.caption(f"🕒 Reported: {alert.get('time')}")
 
+# ==========================================
+# 12. MAIN ROUTER
+# ==========================================
 if "landing_target" not in st.session_state: st.session_state.landing_target = None
 
 if not st.session_state.get("logged_in", False):
@@ -810,7 +852,7 @@ else:
 
 st.markdown("""
 <div class="footer">
-    © 2026 E4GRID. 🇵🇰 Pakistan First
+    © 2026 E4GRID. Global Industrial Immune System.
     <br>
     <a href="#">Privacy Policy</a> · <a href="#">Contact</a> · <a href="https://linkedin.com/company/e4grid" target="_blank">LinkedIn</a>
 </div>
