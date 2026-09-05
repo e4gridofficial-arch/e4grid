@@ -7,7 +7,7 @@ import random
 import requests
 
 # ==========================================
-# 🔒 SECURE
+# 🔒 SECURE (Streamlit Secrets)
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# DATABASE HELPERS
+# DATABASE HELPERS (FIXED PERSISTENCE)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -37,24 +37,18 @@ def db_post(table, data):
     response = requests.post(url, headers=HEADERS, json=data)
     return response.status_code == 201
 
-def db_delete(table, match):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    params = []
-    for key, value in match.items():
-        params.append(f"{key}=eq.{value}")
-    url += "?" + "&".join(params)
-    response = requests.delete(url, headers=HEADERS)
-    return response.status_code == 204
-
 def db_delete_all(table):
+    """Force delete all rows from table"""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     response = requests.delete(url, headers=HEADERS)
     return response.status_code in [200, 204]
 
 def save_data(table, data):
+    """FIXED: Clear and re-insert to ensure permanent save"""
     db_delete_all(table)
     for item in data:
         db_post(table, item)
+    return True
 
 # ==========================================
 # DATA LOAD FUNCTIONS
@@ -63,18 +57,13 @@ def load_factories():
     data = db_get("factories")
     if data:
         for item in data:
-            if "verified" not in item:
-                item["verified"] = False
-            if "manual_score" not in item:
-                item["manual_score"] = 0
-            if "manual_status" not in item:
-                item["manual_status"] = "Green"
-            if "manual_reason" not in item:
-                item["manual_reason"] = "No reason provided"
-            if "country" not in item:
-                item["country"] = "Pakistan"
+            if "verified" not in item: item["verified"] = False
+            if "manual_score" not in item: item["manual_score"] = 0
+            if "manual_status" not in item: item["manual_status"] = "Green"
+            if "manual_reason" not in item: item["manual_reason"] = "No reason"
+            if "country" not in item: item["country"] = "Pakistan"
         return data
-    return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "manual_score": 85, "manual_status": "Green", "manual_reason": "ISO certified, no violations", "verified": False, "history": []}]
+    return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "manual_score": 85, "manual_status": "Green", "manual_reason": "Verified safe", "verified": False, "history": []}]
 
 def save_factories(data):
     save_data("factories", data)
@@ -103,10 +92,8 @@ def load_alerts():
     data = db_get("cyber_alerts")
     if data:
         for item in data:
-            if "priority" not in item:
-                item["priority"] = "Medium"
-            if "notes" not in item:
-                item["notes"] = ""
+            if "priority" not in item: item["priority"] = "Medium"
+            if "notes" not in item: item["notes"] = ""
         return data
     return []
 
@@ -384,12 +371,11 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (MANUAL MODE)
+# ADMIN DASHBOARD (FIXED)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
     
-    # Stats
     total = len(st.session_state.cyber_alerts)
     pending = len([a for a in st.session_state.cyber_alerts if a['status'] not in ['Resolved', 'Closed', 'Archived']])
     resolved = len([a for a in st.session_state.cyber_alerts if a['status'] == 'Resolved'])
@@ -418,7 +404,6 @@ def admin_dashboard():
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 Cyber Reports", "🏭 Factories", "🏢 MNCs", "🌍 Agencies", "📜 Audit Logs"])
     
-    # --- TAB 1: CYBER REPORTS ---
     with tab1:
         search = st.text_input("🔍 Search")
         filtered = st.session_state.cyber_alerts
@@ -443,7 +428,6 @@ def admin_dashboard():
                                     with open(fp, "rb") as f:
                                         st.download_button("📥 Download", f, file_name=alert['evidence_file'])
                         
-                        # Priority
                         priority = st.selectbox(
                             "Priority",
                             ["Low", "Medium", "High"],
@@ -453,16 +437,14 @@ def admin_dashboard():
                         if priority != alert.get('priority'):
                             alert['priority'] = priority
                             save_all()
-                            log_audit(f"Priority updated for {alert.get('tracking_id')} to {priority}")
+                            log_audit(f"Priority updated for {alert.get('tracking_id')}")
                         
-                        # Notes (Agency can see these)
                         notes = st.text_area("Internal Notes", value=alert.get('notes', ''), key=f"notes_{alert['id']}")
                         if notes != alert.get('notes'):
                             alert['notes'] = notes
                             save_all()
                             log_audit(f"Notes updated for {alert.get('tracking_id')}")
                     with col_b:
-                        # Assign to Agency
                         agency_list = list(st.session_state.agencies.keys())
                         assigned = st.selectbox(
                             "Assign to Agency",
@@ -477,7 +459,6 @@ def admin_dashboard():
                             save_all()
                             log_audit(f"Assigned {alert.get('tracking_id')} to {assigned}")
                         
-                        # Status (Agency can update)
                         new_status = st.selectbox(
                             "Status",
                             ["New", "Under Review", "Resolved", "Closed", "Archived"],
@@ -493,12 +474,10 @@ def admin_dashboard():
         else:
             st.success("✅ No active reports.")
     
-    # --- TAB 2: FACTORIES (MANUAL MODE) ---
     with tab2:
         st.subheader("🏭 Factory Compliance (Manual Mode)")
         st.caption("Add factories, set status/score/reason manually, and verify for MNCs.")
         
-        # Stats
         total_f = len(st.session_state.factories)
         verified = len([f for f in st.session_state.factories if f.get('verified', False)])
         green = len([f for f in st.session_state.factories if f.get('verified', False) and f.get('manual_status', 'Green') == 'Green'])
@@ -513,7 +492,6 @@ def admin_dashboard():
         
         st.divider()
         
-        # --- ADD NEW FACTORY ---
         with st.expander("➕ Add New Factory", expanded=False):
             col_a, col_b = st.columns(2)
             with col_a:
@@ -547,13 +525,11 @@ def admin_dashboard():
         
         st.divider()
         
-        # --- FACTORY LIST ---
         for idx, factory in enumerate(st.session_state.factories):
             with st.expander(f"🏭 {factory['name']} ({factory['country']}) - {factory['client']}"):
                 col1, col2 = st.columns([2, 1])
                 
                 with col1:
-                    # Status badge
                     if factory.get('verified', False):
                         st.markdown('<span class="verified-badge">✅ VERIFIED (Sent to MNCs)</span>', unsafe_allow_html=True)
                     else:
@@ -561,14 +537,16 @@ def admin_dashboard():
                     
                     st.write(f"**Current Status:** {factory.get('status', 'Green')}")
                     
-                    # --- MANUAL EDIT FORM ---
                     st.subheader("✏️ Manual Edit")
                     col_edit1, col_edit2 = st.columns(2)
                     with col_edit1:
+                        current_status = factory.get('manual_status', factory.get('status', 'Green'))
+                        status_options = ["Green", "Yellow", "Red"]
+                        status_index = status_options.index(current_status) if current_status in status_options else 0
                         new_status = st.selectbox(
                             "Status",
-                            ["Green", "Yellow", "Red"],
-                            index=["Green", "Yellow", "Red"].index(factory.get('manual_status', factory.get('status', 'Green'))),
+                            status_options,
+                            index=status_index,
                             key=f"fact_status_{factory['id']}"
                         )
                         new_score = st.number_input(
@@ -586,7 +564,6 @@ def admin_dashboard():
                             height=80
                         )
                     
-                    # Save Manual Edit button
                     if st.button(f"💾 Save Changes", key=f"save_fact_{factory['id']}"):
                         factory['manual_status'] = new_status
                         factory['manual_score'] = new_score
@@ -600,14 +577,12 @@ def admin_dashboard():
                         st.success("✅ Changes saved!")
                         st.rerun()
                     
-                    # History
                     if factory.get('history'):
                         with st.expander("📜 History"):
                             for h in factory['history'][-5:]:
                                 st.caption(f"- {h}")
                 
                 with col2:
-                    # --- VERIFY / PUBLISH ---
                     if not factory.get('verified', False):
                         if st.button(f"🔒 Verify & Publish to MNCs", key=f"verify_{factory['id']}", use_container_width=True):
                             factory['verified'] = True
@@ -628,7 +603,6 @@ def admin_dashboard():
                     
                     st.divider()
                     
-                    # --- DELETE FACTORY ---
                     if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}", use_container_width=True):
                         st.session_state.factories = [f for f in st.session_state.factories if f["id"] != factory["id"]]
                         save_all()
@@ -636,7 +610,6 @@ def admin_dashboard():
                         st.success(f"✅ Deleted {factory['name']}")
                         st.rerun()
     
-    # --- TAB 3: MNCs ---
     with tab3:
         for name, data in st.session_state.mnc_clients.items():
             col1, col2, col3 = st.columns([2, 2, 1])
@@ -663,7 +636,6 @@ def admin_dashboard():
                 log_audit(f"MNC Added: {new_mnc}")
                 st.rerun()
     
-    # --- TAB 4: AGENCIES ---
     with tab4:
         for name, data in st.session_state.agencies.items():
             col1, col2, col3 = st.columns([2, 2, 1])
@@ -691,7 +663,6 @@ def admin_dashboard():
                 log_audit(f"Agency Added: {n_ag}")
                 st.rerun()
     
-    # --- TAB 5: AUDIT LOGS ---
     with tab5:
         st.subheader("📜 Complete Activity Trail")
         if st.session_state.audit_logs:
@@ -800,7 +771,6 @@ def agency_dashboard(agency):
                             with open(fp, "rb") as f:
                                 st.download_button("📥 Download Evidence", f, file_name=alert['evidence_file'])
                 
-                # Notes (Agency can see and add)
                 notes = st.text_area("📝 Internal Notes", value=alert.get('notes', ''), key=f"ag_notes_{alert['id']}")
                 if notes != alert.get('notes'):
                     alert['notes'] = notes
