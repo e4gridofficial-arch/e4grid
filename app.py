@@ -7,7 +7,7 @@ import random
 import requests
 
 # ==========================================
-# 🔒 SECURE (Streamlit Secrets)
+# 🔒 SECURE
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# DATABASE HELPERS (FIXED PERSISTENCE)
+# 🛡️ ULTIMATE SAVE FUNCTION (WITH ERROR DISPLAY)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -38,16 +38,31 @@ def db_post(table, data):
     return response.status_code == 201
 
 def db_delete_all(table):
-    """Force delete all rows from table"""
+    """Force delete all rows"""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     response = requests.delete(url, headers=HEADERS)
     return response.status_code in [200, 204]
 
 def save_data(table, data):
-    """FIXED: Clear and re-insert to ensure permanent save"""
-    db_delete_all(table)
+    """
+    FIXED: Pehle delete, phir insert. Agar fail ho toh ERROR dikhao.
+    """
+    # 1. DELETE
+    del_url = f"{SUPABASE_URL}/rest/v1/{table}"
+    del_resp = requests.delete(del_url, headers=HEADERS)
+    
+    if del_resp.status_code not in [200, 204]:
+        st.error(f"❌ DELETE FAILED for {table}!\nStatus: {del_resp.status_code}\nMessage: {del_resp.text[:200]}")
+        return False
+    
+    # 2. INSERT
     for item in data:
-        db_post(table, item)
+        post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/{table}", headers=HEADERS, json=item)
+        if post_resp.status_code != 201:
+            st.error(f"❌ INSERT FAILED for {table}!\nStatus: {post_resp.status_code}\nMessage: {post_resp.text[:200]}")
+            return False
+    
+    st.success(f"✅ Data saved successfully for {table}!")
     return True
 
 # ==========================================
@@ -371,7 +386,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (FIXED)
+# ADMIN DASHBOARD (WITH ERROR DISPLAY)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -676,7 +691,7 @@ def admin_dashboard():
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC DASHBOARD (VERIFIED ONLY)
+# MNC DASHBOARD
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Verified Compliance Dashboard")
@@ -715,7 +730,7 @@ def mnc_dashboard(client):
         )
         st.dataframe(display_df, use_container_width=True)
     else:
-        st.info(f"No verified factories for {client} yet. Factories are verified by the Admin.")
+        st.info(f"No verified factories for {client} yet.")
 
 # ==========================================
 # AGENCY DASHBOARD
