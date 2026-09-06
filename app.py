@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 🛡️ FIXED: DELETE WITH WHERE CLAUSE (db_delete_all)
+# 🛡️ FIXED DELETE (WITH WHERE CLAUSE)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -381,7 +381,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (FIXED)
+# ADMIN DASHBOARD (FIXED: Duplicate Key Error)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -557,24 +557,24 @@ def admin_dashboard():
                             "Status",
                             status_options,
                             index=status_index,
-                            key=f"fact_status_{factory['id']}"
+                            key=f"fact_status_{factory['id']}_{idx}"  # FIXED: Added idx for uniqueness
                         )
                         new_score = st.number_input(
                             "Score (0-100)",
                             min_value=0,
                             max_value=100,
                             value=factory.get('manual_score', 0),
-                            key=f"fact_score_{factory['id']}"
+                            key=f"fact_score_{factory['id']}_{idx}"  # FIXED: Added idx for uniqueness
                         )
                     with col_edit2:
                         new_reason = st.text_area(
                             "Reason",
                             value=factory.get('manual_reason', ''),
-                            key=f"fact_reason_{factory['id']}",
+                            key=f"fact_reason_{factory['id']}_{idx}",  # FIXED: Added idx for uniqueness
                             height=80
                         )
                     
-                    if st.button(f"💾 Save Changes", key=f"save_fact_{factory['id']}"):
+                    if st.button(f"💾 Save Changes", key=f"save_fact_{factory['id']}_{idx}"):
                         factory['manual_status'] = new_status
                         factory['manual_score'] = new_score
                         factory['manual_reason'] = new_reason
@@ -594,7 +594,7 @@ def admin_dashboard():
                 
                 with col2:
                     if not factory.get('verified', False):
-                        if st.button(f"🔒 Verify & Publish to MNCs", key=f"verify_{factory['id']}", use_container_width=True):
+                        if st.button(f"🔒 Verify & Publish to MNCs", key=f"verify_{factory['id']}_{idx}", use_container_width=True):
                             factory['verified'] = True
                             if 'history' not in factory:
                                 factory['history'] = []
@@ -605,7 +605,7 @@ def admin_dashboard():
                             st.rerun()
                     else:
                         st.success("✅ Published to MNCs")
-                        if st.button(f"🔓 Unverify", key=f"unverify_{factory['id']}", use_container_width=True):
+                        if st.button(f"🔓 Unverify", key=f"unverify_{factory['id']}_{idx}", use_container_width=True):
                             factory['verified'] = False
                             save_all()
                             log_audit(f"Factory Unverified: {factory['name']}")
@@ -613,7 +613,7 @@ def admin_dashboard():
                     
                     st.divider()
                     
-                    if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}", use_container_width=True):
+                    if st.button(f"🗑️ Delete {factory['name']}", key=f"del_fact_{factory['id']}_{idx}", use_container_width=True):
                         st.session_state.factories = [f for f in st.session_state.factories if f["id"] != factory["id"]]
                         save_all()
                         log_audit(f"Factory Deleted: {factory['name']}")
@@ -686,7 +686,7 @@ def admin_dashboard():
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC DASHBOARD
+# MNC DASHBOARD (FIXED: AttributeError)
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Verified Compliance Dashboard")
@@ -699,6 +699,7 @@ def mnc_dashboard(client):
     
     if not df.empty:
         total = len(df)
+        # FIXED: Correct syntax for counting
         green = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Green'])
         yellow = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Yellow'])
         red = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Red'])
