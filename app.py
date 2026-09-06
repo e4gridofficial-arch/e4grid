@@ -7,11 +7,11 @@ import random
 import requests
 
 # ==========================================
-# 🔒 SECURE (Streamlit Secrets)
+# 🔒 SECURE (Render & Streamlit Compatible)
 # ==========================================
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
