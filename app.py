@@ -20,7 +20,7 @@ HEADERS = {
 }
 
 # ==========================================
-# 🛡️ FIXED DELETE (WITH WHERE CLAUSE)
+# 🛡️ FIXED DELETE + INSERT (With Stop on Fail)
 # ==========================================
 def db_get(table, select="*", match=None):
     url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
@@ -38,13 +38,12 @@ def db_post(table, data):
     return response.status_code == 201
 
 def db_delete_all(table):
-    """FIXED: Supabase requires a WHERE clause. Adding ?id=neq.0 to delete all."""
     url = f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0"
     response = requests.delete(url, headers=HEADERS)
     return response.status_code in [200, 204]
 
 def save_data(table, data):
-    # 1. DELETE (Ab with WHERE clause, isliye chalega)
+    # 1. DELETE (Force delete)
     del_resp = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0", headers=HEADERS)
     if del_resp.status_code not in [200, 204]:
         st.error(f"❌ DELETE FAILED for {table}!\nStatus: {del_resp.status_code}\nMessage: {del_resp.text[:200]}")
@@ -61,7 +60,7 @@ def save_data(table, data):
     return True
 
 # ==========================================
-# DATA LOAD FUNCTIONS
+# DATA LOAD FUNCTIONS (With Error Check)
 # ==========================================
 def load_factories():
     data = db_get("factories")
@@ -76,7 +75,8 @@ def load_factories():
     return [{"id": 1, "name": "Saga Sports", "client": "Nike", "country": "Pakistan", "status": "Green", "risk": "Low", "manual_score": 85, "manual_status": "Green", "manual_reason": "Verified safe", "verified": False, "history": []}]
 
 def save_factories(data):
-    save_data("factories", data)
+    if not save_data("factories", data):
+        st.stop()  # Agar fail ho toh aage ka code mat chalo
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -86,7 +86,8 @@ def load_mnc_clients():
 
 def save_mnc_clients(data):
     transformed = [{"name": k, "password": v["password"], "active": v["active"]} for k, v in data.items()]
-    save_data("mnc_clients", transformed)
+    if not save_data("mnc_clients", transformed):
+        st.stop()
 
 def load_agencies():
     data = db_get("agencies")
@@ -96,7 +97,8 @@ def load_agencies():
 
 def save_agencies(data):
     transformed = [{"name": k, "password": v["password"], "helpline": v["helpline"], "active": v["active"]} for k, v in data.items()]
-    save_data("agencies", transformed)
+    if not save_data("agencies", transformed):
+        st.stop()
 
 def load_alerts():
     data = db_get("cyber_alerts")
@@ -108,14 +110,16 @@ def load_alerts():
     return []
 
 def save_alerts(data):
-    save_data("cyber_alerts", data)
+    if not save_data("cyber_alerts", data):
+        st.stop()
 
 def load_audit():
     data = db_get("audit_logs")
     return data if data else []
 
 def save_audit(data):
-    save_data("audit_logs", data)
+    if not save_data("audit_logs", data):
+        st.stop()
 
 def load_views():
     data = db_get("views_data")
@@ -381,7 +385,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (FIXED: Duplicate Key Error)
+# ADMIN DASHBOARD (UNIQUE KEYS FIXED)
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -557,20 +561,20 @@ def admin_dashboard():
                             "Status",
                             status_options,
                             index=status_index,
-                            key=f"fact_status_{factory['id']}_{idx}"  # FIXED: Added idx for uniqueness
+                            key=f"fact_status_{factory['id']}_{idx}"
                         )
                         new_score = st.number_input(
                             "Score (0-100)",
                             min_value=0,
                             max_value=100,
                             value=factory.get('manual_score', 0),
-                            key=f"fact_score_{factory['id']}_{idx}"  # FIXED: Added idx for uniqueness
+                            key=f"fact_score_{factory['id']}_{idx}"
                         )
                     with col_edit2:
                         new_reason = st.text_area(
                             "Reason",
                             value=factory.get('manual_reason', ''),
-                            key=f"fact_reason_{factory['id']}_{idx}",  # FIXED: Added idx for uniqueness
+                            key=f"fact_reason_{factory['id']}_{idx}",
                             height=80
                         )
                     
@@ -686,25 +690,25 @@ def admin_dashboard():
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC DASHBOARD (FIXED: AttributeError)
+# MNC DASHBOARD (FIXED: No DataFrame Loop)
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Verified Compliance Dashboard")
     st.caption("✅ Only VERIFIED factories are shown here.")
     
-    df = pd.DataFrame([
+    # DIRECT LIST OF DICTS (No DataFrame loop confusion)
+    factories_list = [
         f for f in st.session_state.factories
         if f["client"] == client and f.get("verified", False)
-    ])
+    ]
     
-    if not df.empty:
-        total = len(df)
-        # FIXED: Correct syntax for counting
-        green = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Green'])
-        yellow = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Yellow'])
-        red = len([f for f in df if f.get('manual_status', f.get('status', 'Green')) == 'Red'])
+    if factories_list:
+        total = len(factories_list)
+        green = len([f for f in factories_list if f.get('manual_status', f.get('status', 'Green')) == 'Green'])
+        yellow = len([f for f in factories_list if f.get('manual_status', f.get('status', 'Green')) == 'Yellow'])
+        red = len([f for f in factories_list if f.get('manual_status', f.get('status', 'Green')) == 'Red'])
         
-        scores = [f.get('manual_score', 0) for f in df]
+        scores = [f.get('manual_score', 0) for f in factories_list]
         avg_score = sum(scores) / len(scores) if scores else 0
         
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -721,7 +725,8 @@ def mnc_dashboard(client):
         </div>
         """, unsafe_allow_html=True)
         
-        display_df = df[['id', 'name', 'country', 'manual_status', 'manual_score', 'manual_reason']].rename(
+        # Display using list of dicts directly in dataframe
+        display_df = pd.DataFrame(factories_list)[['id', 'name', 'country', 'manual_status', 'manual_score', 'manual_reason']].rename(
             columns={'manual_status': 'Status', 'manual_score': 'Score', 'manual_reason': 'Reason'}
         )
         st.dataframe(display_df, use_container_width=True)
