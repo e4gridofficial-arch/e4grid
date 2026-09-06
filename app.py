@@ -7,7 +7,7 @@ import random
 import requests
 
 # ==========================================
-# 🔒 SECURE
+# 🔒 SECURE (Streamlit Secrets)
 # ==========================================
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -20,47 +20,55 @@ HEADERS = {
 }
 
 # ==========================================
-# 🛡️ FIXED DELETE + INSERT (With Stop on Fail)
+# 🛡️ DATABASE HELPERS (With Error Handling)
 # ==========================================
 def db_get(table, select="*", match=None):
-    url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
-    if match:
-        for key, value in match.items():
-            url += f"&{key}=eq.{value}"
-    response = requests.get(url, headers=HEADERS)
-    if response.status_code == 200:
-        return response.json()
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}"
+        if match:
+            for key, value in match.items():
+                url += f"&{key}=eq.{value}"
+        response = requests.get(url, headers=HEADERS)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        pass
     return []
 
 def db_post(table, data):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    response = requests.post(url, headers=HEADERS, json=data)
-    return response.status_code == 201
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{table}"
+        response = requests.post(url, headers=HEADERS, json=data)
+        return response.status_code == 201
+    except:
+        return False
 
 def db_delete_all(table):
-    url = f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0"
-    response = requests.delete(url, headers=HEADERS)
-    return response.status_code in [200, 204]
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0"
+        response = requests.delete(url, headers=HEADERS)
+        return response.status_code in [200, 204]
+    except:
+        return False
 
 def save_data(table, data):
-    # 1. DELETE (Force delete)
-    del_resp = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0", headers=HEADERS)
-    if del_resp.status_code not in [200, 204]:
-        st.error(f"❌ DELETE FAILED for {table}!\nStatus: {del_resp.status_code}\nMessage: {del_resp.text[:200]}")
-        return False
-    
-    # 2. INSERT
-    for item in data:
-        post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/{table}", headers=HEADERS, json=item)
-        if post_resp.status_code != 201:
-            st.error(f"❌ INSERT FAILED for {table}!\nStatus: {post_resp.status_code}\nMessage: {post_resp.text[:200]}")
+    try:
+        # 1. DELETE
+        del_resp = requests.delete(f"{SUPABASE_URL}/rest/v1/{table}?id=neq.0", headers=HEADERS)
+        if del_resp.status_code not in [200, 204]:
             return False
-    
-    st.success(f"✅ Data saved successfully for {table}!")
-    return True
+        
+        # 2. INSERT
+        for item in data:
+            post_resp = requests.post(f"{SUPABASE_URL}/rest/v1/{table}", headers=HEADERS, json=item)
+            if post_resp.status_code != 201:
+                return False
+        return True
+    except:
+        return False
 
 # ==========================================
-# DATA LOAD FUNCTIONS (With Error Check)
+# DATA LOAD FUNCTIONS
 # ==========================================
 def load_factories():
     data = db_get("factories")
@@ -76,7 +84,7 @@ def load_factories():
 
 def save_factories(data):
     if not save_data("factories", data):
-        st.stop()  # Agar fail ho toh aage ka code mat chalo
+        st.error("❌ Failed to save factories. Please try again.")
 
 def load_mnc_clients():
     data = db_get("mnc_clients")
@@ -87,7 +95,7 @@ def load_mnc_clients():
 def save_mnc_clients(data):
     transformed = [{"name": k, "password": v["password"], "active": v["active"]} for k, v in data.items()]
     if not save_data("mnc_clients", transformed):
-        st.stop()
+        st.error("❌ Failed to save MNC clients.")
 
 def load_agencies():
     data = db_get("agencies")
@@ -98,7 +106,7 @@ def load_agencies():
 def save_agencies(data):
     transformed = [{"name": k, "password": v["password"], "helpline": v["helpline"], "active": v["active"]} for k, v in data.items()]
     if not save_data("agencies", transformed):
-        st.stop()
+        st.error("❌ Failed to save agencies.")
 
 def load_alerts():
     data = db_get("cyber_alerts")
@@ -111,15 +119,17 @@ def load_alerts():
 
 def save_alerts(data):
     if not save_data("cyber_alerts", data):
-        st.stop()
+        st.error("❌ Failed to save alerts.")
 
 def load_audit():
     data = db_get("audit_logs")
     return data if data else []
 
 def save_audit(data):
-    if not save_data("audit_logs", data):
-        st.stop()
+    try:
+        save_data("audit_logs", data)
+    except:
+        pass  # Audit logs fail ho toh app crash nahi karega
 
 def load_views():
     data = db_get("views_data")
@@ -155,13 +165,19 @@ if "views_data" not in st.session_state:
     st.session_state.views_data = views
     save_views(views)
 
+# ==========================================
+# AUDIT LOG (FIXED: NEVER CRASHES)
+# ==========================================
 def log_audit(action, user="System"):
-    st.session_state.audit_logs.append({
-        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "user": user,
-        "action": action
-    })
-    save_audit(st.session_state.audit_logs)
+    try:
+        st.session_state.audit_logs.append({
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "user": user,
+            "action": action
+        })
+        save_audit(st.session_state.audit_logs)
+    except:
+        pass  # Audit log fail ho toh app freeze nahi karega
 
 def save_all():
     save_factories(st.session_state.factories)
@@ -385,7 +401,7 @@ def public_dashboard():
             st.markdown(generate_timeline(found[0]['status']), unsafe_allow_html=True)
 
 # ==========================================
-# ADMIN DASHBOARD (UNIQUE KEYS FIXED)
+# ADMIN DASHBOARD
 # ==========================================
 def admin_dashboard():
     st.header("👑 Command Center")
@@ -690,13 +706,12 @@ def admin_dashboard():
             st.info("No activities recorded yet.")
 
 # ==========================================
-# MNC DASHBOARD (FIXED: No DataFrame Loop)
+# MNC DASHBOARD
 # ==========================================
 def mnc_dashboard(client):
     st.header(f"🏢 {client} - Verified Compliance Dashboard")
     st.caption("✅ Only VERIFIED factories are shown here.")
     
-    # DIRECT LIST OF DICTS (No DataFrame loop confusion)
     factories_list = [
         f for f in st.session_state.factories
         if f["client"] == client and f.get("verified", False)
@@ -725,7 +740,6 @@ def mnc_dashboard(client):
         </div>
         """, unsafe_allow_html=True)
         
-        # Display using list of dicts directly in dataframe
         display_df = pd.DataFrame(factories_list)[['id', 'name', 'country', 'manual_status', 'manual_score', 'manual_reason']].rename(
             columns={'manual_status': 'Status', 'manual_score': 'Score', 'manual_reason': 'Reason'}
         )
